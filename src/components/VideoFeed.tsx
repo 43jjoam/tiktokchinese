@@ -8,24 +8,7 @@ import { words as wordDataset } from '../data/words'
 
 const LOOP_MS = 5000
 
-/* ── Audio: tap sound + Chinese TTS ── */
-let audioCtx: AudioContext | null = null
-
-function playTapSound() {
-  try {
-    if (!audioCtx) audioCtx = new AudioContext()
-    const osc = audioCtx.createOscillator()
-    const gain = audioCtx.createGain()
-    osc.type = 'sine'
-    osc.frequency.value = 1200
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08)
-    osc.connect(gain).connect(audioCtx.destination)
-    osc.start()
-    osc.stop(audioCtx.currentTime + 0.08)
-  } catch {}
-}
-
+/* ── Audio: Chinese TTS ── */
 function speakChinese(text: string) {
   try {
     if (!window.speechSynthesis) return
@@ -577,7 +560,6 @@ export default function VideoFeed() {
       tapSingleTimeoutRef.current = window.setTimeout(() => {
         setL1LockKey((k) => k + 1)
         setL1Visible(true)
-        playTapSound()
         speakChinese(currentWordRef.current.character)
         window.setTimeout(() => setL1Visible(false), 2000)
         tapSingleTimeoutRef.current = null
