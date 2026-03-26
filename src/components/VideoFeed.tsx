@@ -269,6 +269,14 @@ export default function VideoFeed() {
   const [l1Visible, setL1Visible] = useState(false)
   const [l1LockKey, setL1LockKey] = useState(0)
   const [likeBurstKey, setLikeBurstKey] = useState(0)
+  const [likeBurstVisible, setLikeBurstVisible] = useState(false)
+  const likeBurstTimerRef = useRef<number | null>(null)
+  const triggerLikeBurst = useCallback(() => {
+    setLikeBurstKey((k) => k + 1)
+    setLikeBurstVisible(true)
+    if (likeBurstTimerRef.current) window.clearTimeout(likeBurstTimerRef.current)
+    likeBurstTimerRef.current = window.setTimeout(() => setLikeBurstVisible(false), 600)
+  }, [])
   const [longPressVisible, setLongPressVisible] = useState(false)
   const [showTapGhostHint, setShowTapGhostHint] = useState(false)
   const [showPrimerArrow, setShowPrimerArrow] = useState(false)
@@ -497,7 +505,7 @@ export default function VideoFeed() {
     const videoKey = currentWord.youtube_url || currentWord.video_url
     const nowLiked = toggleVideoLike(videoKey)
     setLiked(nowLiked)
-    if (nowLiked) setLikeBurstKey((k) => k + 1)
+    if (nowLiked) triggerLikeBurst()
   }, [currentWord.youtube_url, currentWord.video_url])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
@@ -511,7 +519,7 @@ export default function VideoFeed() {
       if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
       tapSingleTimeoutRef.current = null
       lastTapUpTimeRef.current = null
-      setLikeBurstKey((k) => k + 1)
+      triggerLikeBurst()
       doLikeRef.current()
     } else {
       lastTapUpTimeRef.current = now
@@ -803,15 +811,16 @@ export default function VideoFeed() {
 
         {/* Like heart burst */}
         <AnimatePresence>
-          {likeBurstKey > 0 && (
+          {likeBurstVisible && (
             <motion.div
               key={likeBurstKey}
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.2, y: -20 }}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+              initial={{ opacity: 1, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1.3 }}
+              exit={{ opacity: 0, scale: 1.6, y: -30 }}
+              transition={{ duration: 0.4 }}
+              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
             >
-              <div className="text-5xl">♥</div>
+              <div className="text-6xl" style={{ color: '#ff2d55' }}>&#x2764;</div>
             </motion.div>
           )}
         </AnimatePresence>
