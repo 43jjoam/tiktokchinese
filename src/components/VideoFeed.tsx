@@ -168,7 +168,7 @@ function avatarGradient(wordId: string) {
 function SwipeHintArrowLeft({ className }: { className?: string }) {
   return (
     <svg
-      className={`text-white/40 ${className ?? ''}`}
+      className={className ?? 'text-white'}
       width={44}
       height={44}
       viewBox="0 0 48 48"
@@ -190,7 +190,7 @@ function SwipeHintArrowLeft({ className }: { className?: string }) {
 function SwipeHintArrowRight({ className }: { className?: string }) {
   return (
     <svg
-      className={`text-white/40 ${className ?? ''}`}
+      className={className ?? 'text-white'}
       width={44}
       height={44}
       viewBox="0 0 48 48"
@@ -480,6 +480,8 @@ export default function VideoFeed() {
   const { wordStates, videoQuality, meta } = persisted
 
   const [sessionVideoIndex, setSessionVideoIndex] = useState(0)
+  const sessionVideoIndexRef = useRef(sessionVideoIndex)
+  sessionVideoIndexRef.current = sessionVideoIndex
   const [currentWordId, setCurrentWordId] = useState(() => {
     const saved = loadCurrentWordId()
     if (saved && words.some((w) => w.word_id === saved)) return saved
@@ -545,9 +547,10 @@ export default function VideoFeed() {
     likeBurstTimerRef.current = window.setTimeout(() => setLikeBurstVisible(false), 600)
   }, [])
   const [longPressVisible, setLongPressVisible] = useState(false)
-  const [showTapGhostHint, setShowTapGhostHint] = useState(false)
-  const ghostHintFiredRef = useRef(false)
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
+  /** After first tap-for-meaning on video 0, show swipe guidance (tap always comes first). */
+  const [firstVideoSwipeRevealed, setFirstVideoSwipeRevealed] = useState(false)
+  const tapPrimerConsumedRef = useRef(false)
   const [videoReady, setVideoReady] = useState(false)
 
   useEffect(() => {
@@ -572,9 +575,9 @@ export default function VideoFeed() {
     tapLoopAtRef.current = 0
     setL1Visible(false)
     setLongPressVisible(false)
-    setShowTapGhostHint(false)
-    ghostHintFiredRef.current = false
     setShowPrimerTapHint(false)
+    setFirstVideoSwipeRevealed(false)
+    tapPrimerConsumedRef.current = false
     setVideoReady(false)
     if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
     tapSingleTimeoutRef.current = null
@@ -590,19 +593,15 @@ export default function VideoFeed() {
 
     let primerTimer: number | null = null
     if (sessionVideoIndex === 0) {
-      primerTimer = window.setTimeout(() => setShowPrimerTapHint(true), 3000)
+      primerTimer = window.setTimeout(() => {
+        if (!tapPrimerConsumedRef.current) setShowPrimerTapHint(true)
+      }, 3000)
     }
 
     const tick = () => {
       const now = Date.now()
       const elapsed = now - startSessionMs
       elapsedMsRef.current = elapsed
-      const loopsElapsed = loopsElapsedFromMs(elapsed)
-
-      if (!ghostHintFiredRef.current && !finalizedRef.current && !tapOccurredRef.current && loopsElapsed >= 10) {
-        ghostHintFiredRef.current = true
-        setShowTapGhostHint(true)
-      }
 
       if (now - lastRenderMsRef.current > 200) {
         setUiTick((x) => x + 1)
@@ -705,7 +704,6 @@ export default function VideoFeed() {
     }
     lastTapUpTimeRef.current = null
     setL1Visible(false)
-    setShowTapGhostHint(false)
 
     const nowMs = Date.now()
     const elapsed = nowMs - sessionStartMsRef.current
@@ -819,6 +817,11 @@ export default function VideoFeed() {
     } else {
       lastTapUpTimeRef.current = now
       tapSingleTimeoutRef.current = window.setTimeout(() => {
+        if (sessionVideoIndexRef.current === 0) {
+          tapPrimerConsumedRef.current = true
+          setShowPrimerTapHint(false)
+          setFirstVideoSwipeRevealed(true)
+        }
         setL1LockKey((k) => k + 1)
         setL1Visible(true)
         speakChinese(currentWordRef.current.character)
@@ -1038,32 +1041,33 @@ export default function VideoFeed() {
       >
         {/* Center via flex on full-screen layer — framer `y` on same node as translate-x-50% was killing horizontal center */}
         <AnimatePresence>
-          {showPrimerTapHint && (
+          {showPrimerTapHint && sessionVideoIndex === 0 && (
             <motion.div
               key="primer-tap"
-              initial={{ opacity: 0, y: 12 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 12 }}
-              className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-4"
+              exit={{ opacity: 0, y: 8 }}
+              className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-6"
             >
-              <div className="w-max max-w-[85vw] rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-center text-sm font-semibold text-white/95 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
-                Tap for meaning
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Ghost hint: reappears after 10 loops without interaction (PRD §7.2) */}
-        <AnimatePresence>
-          {showTapGhostHint && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute left-1/2 bottom-[30%] -translate-x-1/2 pointer-events-none"
-            >
-              <div className="rounded-full bg-white/10 px-4 py-2.5 text-xs font-medium backdrop-blur text-white/70">
-                Tap anywhere for meaning
+              <div className="max-w-[min(18rem,88vw)] text-center">
+                <p
+                  className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/90"
+                  style={{
+                    textShadow:
+                      '0 1px 2px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)',
+                  }}
+                >
+                  Guidance
+                </p>
+                <p
+                  className="mt-3 text-lg font-semibold leading-snug text-white"
+                  style={{
+                    textShadow:
+                      '0 1px 3px rgba(0,0,0,0.95), 0 0 20px rgba(0,0,0,0.88), 0 0 1px rgba(0,0,0,1)',
+                  }}
+                >
+                  Tap for meaning
+                </p>
               </div>
             </motion.div>
           )}
@@ -1117,24 +1121,38 @@ export default function VideoFeed() {
 
       </div>
 
-      {/* Swipe hint arrows — above gesture (z-6) so center tap primer does not paint over them; still non-interactive. */}
-      {videoReady && sessionVideoIndex < 3 && (
+      {/* Swipe guidance — plain text + arrows (no frosted cards). Video 0: only after tap-for-meaning. */}
+      {videoReady &&
+        sessionVideoIndex < 3 &&
+        (sessionVideoIndex > 0 || firstVideoSwipeRevealed) && (
         <div
           className="pointer-events-none absolute inset-0 z-[6]"
           aria-hidden
         >
           <div className="absolute left-2 top-1/2 -translate-y-1/2 sm:left-4">
-            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+            <div className="flex max-w-[7rem] flex-col items-center gap-2 text-center">
               <SwipeHintArrowLeft />
-              <span className="text-[10px] font-medium leading-tight text-white/80">
+              <span
+                className="text-xs font-semibold leading-tight text-white"
+                style={{
+                  textShadow:
+                    '0 1px 3px rgba(0,0,0,0.95), 0 0 16px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)',
+                }}
+              >
                 Too hard / skip
               </span>
             </div>
           </div>
           <div className="absolute right-2 top-1/2 -translate-y-1/2 sm:right-4">
-            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+            <div className="flex max-w-[7rem] flex-col items-center gap-2 text-center">
               <SwipeHintArrowRight />
-              <span className="text-[10px] font-medium leading-tight text-white/80">
+              <span
+                className="text-xs font-semibold leading-tight text-white"
+                style={{
+                  textShadow:
+                    '0 1px 3px rgba(0,0,0,0.95), 0 0 16px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)',
+                }}
+              >
                 Know it
               </span>
             </div>
