@@ -1051,16 +1051,7 @@ export default function VideoFeed() {
             >
               <div className="max-w-[min(18rem,88vw)] text-center">
                 <p
-                  className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/90"
-                  style={{
-                    textShadow:
-                      '0 1px 2px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.9), 0 0 1px rgba(0,0,0,1)',
-                  }}
-                >
-                  Guidance
-                </p>
-                <p
-                  className="mt-3 text-lg font-semibold leading-snug text-white"
+                  className="text-lg font-semibold leading-snug text-white"
                   style={{
                     textShadow:
                       '0 1px 3px rgba(0,0,0,0.95), 0 0 20px rgba(0,0,0,0.88), 0 0 1px rgba(0,0,0,1)',
@@ -1129,7 +1120,7 @@ export default function VideoFeed() {
           className="pointer-events-none absolute inset-0 z-[6]"
           aria-hidden
         >
-          <div className="absolute left-2 top-1/2 -translate-y-1/2 sm:left-4">
+          <div className="absolute left-2 top-[36%] -translate-y-1/2 sm:left-4 sm:top-[38%]">
             <div className="flex max-w-[7rem] flex-col items-center gap-2 text-center">
               <SwipeHintArrowLeft />
               <span
@@ -1143,7 +1134,7 @@ export default function VideoFeed() {
               </span>
             </div>
           </div>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 sm:right-4">
+          <div className="absolute right-2 top-[36%] -translate-y-1/2 sm:right-4 sm:top-[38%] pr-1">
             <div className="flex max-w-[7rem] flex-col items-center gap-2 text-center">
               <SwipeHintArrowRight />
               <span
