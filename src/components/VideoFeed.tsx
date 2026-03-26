@@ -181,6 +181,27 @@ function extractYouTubeId(url: string): string | null {
 let ytApiLoaded = false
 const ytApiQueue: (() => void)[] = []
 
+function suggestedYoutubeQuality(): string {
+  if (typeof window === 'undefined') return 'medium'
+  try {
+    return window.matchMedia('(max-width: 480px)').matches ? 'small' : 'medium'
+  } catch {
+    return 'medium'
+  }
+}
+
+/** Single-short infinite loop (TikTok-style) — IFrame API + ENDED fallback. */
+function applyYoutubeLoop(player: any) {
+  try {
+    if (typeof player.setLoop === 'function') player.setLoop(true)
+  } catch {}
+  try {
+    if (suggestedYoutubeQuality() === 'small' && typeof player.setPlaybackQuality === 'function') {
+      player.setPlaybackQuality('small')
+    }
+  } catch {}
+}
+
 function ensureYouTubeAPI(): Promise<void> {
   const YT = (window as any).YT
   if (YT?.Player) {
@@ -297,13 +318,17 @@ function YouTubePlayer({
             modestbranding: 1,
             rel: 0,
             fs: 0,
-            loop: 0,
+            iv_load_policy: 3,
+            // loop=1 requires playlist with the same id for a single Short to repeat like TikTok.
+            loop: 1,
+            playlist: videoId,
             ...(origin ? { origin } : {}),
           },
           events: {
             onReady: (e: any) => {
               if (cancelled) return
               try {
+                applyYoutubeLoop(e.target)
                 e.target.mute()
                 e.target.playVideo()
               } catch {}
@@ -317,8 +342,10 @@ function YouTubePlayer({
                 firePlayingOnce()
               }
               if (e.data === YT.PlayerState.ENDED) {
-                e.target.seekTo(0)
-                e.target.playVideo()
+                try {
+                  e.target.seekTo(0)
+                  e.target.playVideo()
+                } catch {}
               }
             },
             onError: () => {
@@ -330,7 +357,11 @@ function YouTubePlayer({
       } else {
         armFallback()
         try {
-          playerRef.current.loadVideoById(videoId)
+          playerRef.current.loadVideoById({
+            videoId,
+            suggestedQuality: suggestedYoutubeQuality(),
+          })
+          applyYoutubeLoop(playerRef.current)
           playerRef.current.mute()
           playerRef.current.playVideo()
         } catch {
@@ -351,6 +382,10 @@ function YouTubePlayer({
 
 export default function VideoFeed() {
   const words: WordMetadata[] = wordDataset
+
+  useEffect(() => {
+    void ensureYouTubeAPI()
+  }, [])
 
   const locale = useMemo(() => detectSupportedLocale(), [])
   const rawLang = useMemo(() => getRawLangCode(), [])
@@ -912,10 +947,11 @@ export default function VideoFeed() {
             muted
             loop
             playsInline
-            preload="metadata"
+            preload="auto"
             className="h-full w-full object-cover"
             style={{ pointerEvents: 'none' }}
             onLoadedData={() => setVideoReady(true)}
+            onCanPlay={() => setVideoReady(true)}
           />
         )}
       </div>
