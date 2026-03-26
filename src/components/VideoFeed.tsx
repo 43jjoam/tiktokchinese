@@ -95,8 +95,10 @@ function pickNextWord(args: {
   words: WordMetadata[]
   wordStates: Record<string, WordState>
   roll: number
+  /** Total swipe sessions (from meta); used for early onboarding mix */
+  sessionsServed: number
 }): WordMetadata {
-  const { words, wordStates, roll } = args
+  const { words, wordStates, roll, sessionsServed } = args
 
   const MASTERY_THRESHOLD = 3.0
   const fallback = () => pickRandomWord(words)
@@ -125,8 +127,26 @@ function pickNextWord(args: {
     return arr[Math.floor(Math.random() * arr.length)]
   }
 
-  if (roll < 0.1) return pickFrom(bucketA) ?? pickFrom(bucketB) ?? pickFrom(bucketC) ?? fallback()
-  if (roll < 0.75) return pickFrom(bucketB) ?? pickFrom(bucketC) ?? pickFrom(bucketA) ?? fallback()
+  // Cold start: every eligible word is still "new" (PRD bucket A only). 10/65/25 has no B/C to
+  // target — use uniform picks from new words only.
+  const coldStart =
+    bucketA.length > 0 && bucketB.length === 0 && bucketC.length === 0
+  if (coldStart) {
+    return pickFrom(bucketA) ?? fallback()
+  }
+
+  // First ~40 sessions: bias toward bucket A so new users see more different characters
+  // before the usual 10% "new" slice dominates exploration.
+  const earlyOnboarding = sessionsServed < 40 && bucketA.length > 0
+  const aFirstThreshold = earlyOnboarding ? 0.35 : 0.1
+  const bFirstThreshold = earlyOnboarding ? 0.82 : 0.75
+
+  if (roll < aFirstThreshold) {
+    return pickFrom(bucketA) ?? pickFrom(bucketB) ?? pickFrom(bucketC) ?? fallback()
+  }
+  if (roll < bFirstThreshold) {
+    return pickFrom(bucketB) ?? pickFrom(bucketC) ?? pickFrom(bucketA) ?? fallback()
+  }
   return pickFrom(bucketC) ?? pickFrom(bucketB) ?? pickFrom(bucketA) ?? fallback()
 }
 
@@ -445,7 +465,12 @@ export default function VideoFeed() {
     const roll = Math.random()
     const candidates = excludeWordId ? words.filter((w) => w.word_id !== excludeWordId) : words
     if (candidates.length === 0) return pickRandomWord(words)
-    const next = pickNextWord({ words: candidates, wordStates, roll })
+    const next = pickNextWord({
+      words: candidates,
+      wordStates,
+      roll,
+      sessionsServed: meta.sessionsServed,
+    })
     return next
   }
 
@@ -808,7 +833,12 @@ export default function VideoFeed() {
     const candidates = words.filter((w) => !seen.has(w.word_id))
     for (let i = 0; i < 3 && candidates.length > 0; i++) {
       const roll = Math.random()
-      const pick = pickNextWord({ words: candidates, wordStates, roll })
+      const pick = pickNextWord({
+        words: candidates,
+        wordStates,
+        roll,
+        sessionsServed: meta.sessionsServed,
+      })
       if (seen.has(pick.word_id)) break
       seen.add(pick.word_id)
       upcoming.push(pick)
@@ -816,7 +846,7 @@ export default function VideoFeed() {
     }
     return upcoming
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWord.word_id])
+  }, [currentWord.word_id, meta.sessionsServed, wordStates])
 
   const preloadSrcs = useMemo(
     () =>
