@@ -144,14 +144,22 @@ let ytApiLoaded = false
 const ytApiQueue: (() => void)[] = []
 
 function ensureYouTubeAPI(): Promise<void> {
-  if (ytApiLoaded && (window as any).YT?.Player) return Promise.resolve()
+  const YT = (window as any).YT
+  if (YT?.Player) {
+    ytApiLoaded = true
+    return Promise.resolve()
+  }
   return new Promise((resolve) => {
     ytApiQueue.push(resolve)
     if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return
     const s = document.createElement('script')
     s.src = 'https://www.youtube.com/iframe_api'
     document.head.appendChild(s)
+    const prev = (window as any).onYouTubeIframeAPIReady
     ;(window as any).onYouTubeIframeAPIReady = () => {
+      try {
+        prev?.()
+      } catch {}
       ytApiLoaded = true
       for (const cb of ytApiQueue) cb()
       ytApiQueue.length = 0
@@ -184,6 +192,11 @@ function YouTubePlayer({
       hostRef.current.innerHTML = ''
       hostRef.current.appendChild(holder)
 
+      const origin =
+        typeof window !== 'undefined' && window.location?.origin
+          ? window.location.origin
+          : undefined
+
       playerRef.current = new (window as any).YT.Player(holder, {
         videoId,
         playerVars: {
@@ -195,8 +208,15 @@ function YouTubePlayer({
           rel: 0,
           fs: 0,
           loop: 0,
+          ...(origin ? { origin } : {}),
         },
         events: {
+          onReady: (e: any) => {
+            try {
+              e.target.mute()
+              e.target.playVideo()
+            } catch {}
+          },
           onStateChange: (e: any) => {
             const YT = (window as any).YT
             if (e.data === YT.PlayerState.PLAYING && !firedRef.current) {
@@ -259,6 +279,11 @@ export default function VideoFeed() {
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
 
+  const ytId = useMemo(
+    () => (currentWord.youtube_url ? extractYouTubeId(currentWord.youtube_url) : null),
+    [currentWord.youtube_url],
+  )
+
   const elapsedMsRef = useRef(0)
   const sessionStartMsRef = useRef<number>(Date.now())
   const rafRef = useRef<number | null>(null)
@@ -299,6 +324,15 @@ export default function VideoFeed() {
   const [showPrimerArrow, setShowPrimerArrow] = useState(false)
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
+
+  useEffect(() => {
+    if (!ytId) return
+    const t = window.setTimeout(() => {
+      setVideoReady((r) => r || true)
+    }, 12000)
+    return () => window.clearTimeout(t)
+  }, [currentWord.word_id, ytId])
+
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const likedRef = useRef(false)
@@ -737,8 +771,6 @@ export default function VideoFeed() {
     }
   }
 
-  const ytId = currentWord.youtube_url ? extractYouTubeId(currentWord.youtube_url) : null
-
   const preloadWords = useMemo(() => {
     const upcoming: WordMetadata[] = []
     const seen = new Set<string>([currentWord.word_id])
@@ -799,16 +831,19 @@ export default function VideoFeed() {
         )}
       </div>
 
-      {/* Hidden preload iframes for next 2-3 videos */}
-      <div className="absolute" style={{ width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none', zIndex: -1 }}>
+      {/* Hidden preload iframes — no loading="lazy" (delays warm-up on mobile) */}
+      <div
+        className="fixed pointer-events-none overflow-hidden opacity-0"
+        style={{ width: 4, height: 4, bottom: 0, right: 0, zIndex: -1 }}
+        aria-hidden
+      >
         {preloadSrcs.map((src) => (
           <iframe
             key={src}
             src={src}
             title="preload"
-            style={{ width: 1, height: 1, border: 0 }}
+            style={{ width: 4, height: 4, border: 0 }}
             tabIndex={-1}
-            loading="lazy"
           />
         ))}
       </div>

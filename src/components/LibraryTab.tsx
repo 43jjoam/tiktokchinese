@@ -33,7 +33,7 @@ export default function LibraryTab() {
   }, [code])
 
   return (
-    <div className="h-dvh overflow-y-auto pb-20 pt-4 px-5">
+    <div className="relative z-10 h-dvh overflow-y-auto bg-black pb-20 pt-4 px-5">
       <h1 className="text-xl font-bold">Library</h1>
 
       {/* Shop link */}

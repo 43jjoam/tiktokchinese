@@ -172,7 +172,7 @@ export default function ProfileTab() {
   const pct = Math.round(progress * 100)
 
   return (
-    <div className="relative h-dvh overflow-hidden">
+    <div className="relative z-10 h-dvh overflow-hidden bg-black">
       <div className="h-full overflow-y-auto pb-20 pt-4 px-5">
         {/* Avatar & name */}
         <div className="flex flex-col items-center pt-6">

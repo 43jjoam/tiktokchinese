@@ -9,8 +9,22 @@ export default function App() {
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-black text-white">
-      {/* Home tab: always mounted, hidden via CSS to preserve video state */}
-      <div style={{ display: activeTab === 'home' ? 'contents' : 'none' }}>
+      {/* Home: keep mounted but avoid display:none — that tears down iframe/video on mobile */}
+      <div
+        style={
+          activeTab === 'home'
+            ? { display: 'contents' }
+            : {
+                position: 'absolute',
+                inset: 0,
+                overflow: 'hidden',
+                opacity: 0,
+                pointerEvents: 'none',
+                zIndex: 0,
+              }
+        }
+        aria-hidden={activeTab !== 'home'}
+      >
         <VideoFeed />
       </div>
 
