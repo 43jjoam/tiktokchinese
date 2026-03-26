@@ -8,8 +8,11 @@ export type WordMetadata = {
   pinyin: string
   l1_meanings: Partial<Record<Locale, string>>
   video_url: string
-  // Original video source (useful for future download/sync tooling).
+  // Original video source (reference / tooling). Playback uses the iframe player when present,
+  // unless use_video_url is true — then video_url is used (e.g. other decks with bundled MP4s).
   youtube_url?: string
+  /** When true, always play video_url in a native <video>; youtube_url is ignored for playback. */
+  use_video_url?: boolean
   base_complexity: number
   dependencies: WordId[]
 }

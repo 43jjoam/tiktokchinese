@@ -428,10 +428,11 @@ export default function VideoFeed() {
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
 
-  const ytId = useMemo(
-    () => (currentWord.youtube_url ? extractYouTubeId(currentWord.youtube_url) : null),
-    [currentWord.youtube_url],
-  )
+  const ytId = useMemo(() => {
+    if (currentWord.use_video_url) return null
+    if (!currentWord.youtube_url) return null
+    return extractYouTubeId(currentWord.youtube_url)
+  }, [currentWord.youtube_url, currentWord.use_video_url])
 
   const elapsedMsRef = useRef(0)
   const sessionStartMsRef = useRef<number>(Date.now())
