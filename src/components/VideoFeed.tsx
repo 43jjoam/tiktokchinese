@@ -254,6 +254,30 @@ function YouTubePlayer({
   useEffect(() => {
     let cancelled = false
     let playingFallbackTimer: number | null = null
+    let endedPollId: number | null = null
+
+    const clearEndedPoll = () => {
+      if (endedPollId !== null) {
+        window.clearInterval(endedPollId)
+        endedPollId = null
+      }
+    }
+
+    const startEndedPoll = () => {
+      if (endedPollId !== null) return
+      endedPollId = window.setInterval(() => {
+        if (cancelled || !playerRef.current) return
+        try {
+          const YT = (window as any).YT
+          const p = playerRef.current
+          if (p.getPlayerState?.() === YT.PlayerState.ENDED) {
+            applyYoutubeLoop(p)
+            p.seekTo(0, true)
+            p.playVideo()
+          }
+        } catch {}
+      }, 700)
+    }
 
     const clearFallback = () => {
       if (playingFallbackTimer !== null) {
@@ -336,14 +360,18 @@ function YouTubePlayer({
               styleIframe()
             },
             onStateChange: (e: any) => {
-              if (cancelled || !matchesCurrentVideo(e.target)) return
+              if (cancelled) return
               const YT = (window as any).YT
-              if (e.data === YT.PlayerState.PLAYING) {
+              const st = e.data
+              // PRD: clip loops until the user swipes (TikTok-style). Only gate PLAYING on
+              // getVideoData — Shorts often mismatch ids after the first loop and would block ENDED.
+              if (st === YT.PlayerState.PLAYING && matchesCurrentVideo(e.target)) {
                 firePlayingOnce()
               }
-              if (e.data === YT.PlayerState.ENDED) {
+              if (st === YT.PlayerState.ENDED) {
                 try {
-                  e.target.seekTo(0)
+                  applyYoutubeLoop(e.target)
+                  e.target.seekTo(0, true)
                   e.target.playVideo()
                 } catch {}
               }
@@ -354,6 +382,7 @@ function YouTubePlayer({
           },
         })
         styleIframe()
+        startEndedPoll()
       } else {
         armFallback()
         try {
@@ -368,12 +397,14 @@ function YouTubePlayer({
           firePlayingOnce()
         }
         styleIframe()
+        startEndedPoll()
       }
     })()
 
     return () => {
       cancelled = true
       clearFallback()
+      clearEndedPoll()
     }
   }, [videoId])
 
@@ -953,6 +984,13 @@ export default function VideoFeed() {
             style={{ pointerEvents: 'none' }}
             onLoadedData={() => setVideoReady(true)}
             onCanPlay={() => setVideoReady(true)}
+            onEnded={(ev) => {
+              const v = ev.currentTarget
+              try {
+                v.currentTime = 0
+                void v.play()
+              } catch {}
+            }}
           />
         )}
       </div>
