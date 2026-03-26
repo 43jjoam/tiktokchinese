@@ -547,7 +547,6 @@ export default function VideoFeed() {
   const [longPressVisible, setLongPressVisible] = useState(false)
   const [showTapGhostHint, setShowTapGhostHint] = useState(false)
   const ghostHintFiredRef = useRef(false)
-  const [showPrimerArrow, setShowPrimerArrow] = useState(false)
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
 
@@ -575,7 +574,6 @@ export default function VideoFeed() {
     setLongPressVisible(false)
     setShowTapGhostHint(false)
     ghostHintFiredRef.current = false
-    setShowPrimerArrow(false)
     setShowPrimerTapHint(false)
     setVideoReady(false)
     if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
@@ -591,9 +589,7 @@ export default function VideoFeed() {
     const startSessionMs = sessionStartMsRef.current
 
     let primerTimer: number | null = null
-    if (sessionVideoIndex === 0) {
-      primerTimer = window.setTimeout(() => setShowPrimerArrow(true), 3000)
-    } else if (sessionVideoIndex === 1) {
+    if (sessionVideoIndex === 1) {
       primerTimer = window.setTimeout(() => setShowPrimerTapHint(true), 3000)
     }
 
@@ -1040,23 +1036,27 @@ export default function VideoFeed() {
         )}
       </div>
 
-      {/* Swipe hint arrows — first 3 feed cards only; under gesture layer (z-5). */}
+      {/* Swipe hint arrows — frosted glass pills, first 3 cards only; under gesture layer (z-5). */}
       {videoReady && sessionVideoIndex < 3 && (
         <div
           className="pointer-events-none absolute inset-0 z-[4]"
           aria-hidden
         >
-          <div className="absolute left-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1.5 pl-1 text-center sm:left-3 sm:pl-0">
-            <SwipeHintArrowLeft />
-            <span className="max-w-[4.25rem] text-[10px] font-medium leading-tight text-white/45 sm:max-w-[5rem]">
-              Too hard / skip
-            </span>
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 sm:left-4">
+            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+              <SwipeHintArrowLeft />
+              <span className="text-[10px] font-medium leading-tight text-white/80">
+                Too hard / skip
+              </span>
+            </div>
           </div>
-          <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1.5 pr-1 text-center sm:right-3 sm:pr-0">
-            <SwipeHintArrowRight />
-            <span className="max-w-[4.25rem] text-[10px] font-medium leading-tight text-white/45 sm:max-w-[5rem]">
-              Know it
-            </span>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 sm:right-4">
+            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+              <SwipeHintArrowRight />
+              <span className="text-[10px] font-medium leading-tight text-white/80">
+                Know it
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -1074,27 +1074,6 @@ export default function VideoFeed() {
         role="application"
         aria-label="Character feed. Swipe right or up if you know the word; swipe left or down if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
       >
-        {/* Onboarding primer: swipe scoring (PRD — loop until user advances) */}
-        <AnimatePresence>
-          {showPrimerArrow && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              className="absolute left-1/2 top-1/2 w-[min(92vw,340px)] -translate-x-1/2 -translate-y-1/2 px-2"
-            >
-              <div className="rounded-2xl bg-black/45 px-4 py-3.5 text-center shadow-lg backdrop-blur-md border border-white/10">
-                <p className="text-sm font-semibold text-white">
-                  Swipe right or up — you know this word
-                </p>
-                <p className="mt-2 text-xs leading-relaxed text-white/75">
-                  Swipe left or down — too hard to remember, not interested, or skip for now
-                </p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Onboarding primer: "Tap for meaning" hint on Video 2 */}
         <AnimatePresence>
           {showPrimerTapHint && (
