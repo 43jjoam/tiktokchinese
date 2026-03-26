@@ -33,7 +33,8 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-2',
     title: 'HSK 2',
     subtitle: 'Digital flashcards',
-    shopUrl: product('hsk-2-digital-flashcards'),
+    shopUrl:
+      'https://bestling.net/products/hsk-2-digital-flashcards-learn-chinese-vocabulary-with-audio-support',
     matches: (d) => matchHskLevel(d.name, 2),
     accent: 'green',
   },
@@ -57,7 +58,8 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-5',
     title: 'HSK 5',
     subtitle: 'Digital flashcards',
-    shopUrl: product('hsk-5-digital-flashcards'),
+    shopUrl:
+      'https://bestling.net/products/hsk-5-digital-flashcards?pr_prod_strat=e5_desc&pr_rec_id=1dc96617a&pr_rec_pid=9109905703149&pr_ref_pid=9108570833133&pr_seq=uniform',
     matches: (d) => matchHskLevel(d.name, 5),
     accent: 'indigo',
   },
@@ -65,7 +67,8 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-6',
     title: 'HSK 6',
     subtitle: 'Digital flashcards',
-    shopUrl: product('hsk-6-digital-flashcards'),
+    shopUrl:
+      'https://bestling.net/products/hsk-6-digital-flashcards?pr_prod_strat=e5_desc&pr_rec_id=6316b7400&pr_rec_pid=9109915533549&pr_ref_pid=9109905703149&pr_seq=uniform',
     matches: (d) => matchHskLevel(d.name, 6),
     accent: 'violet',
   },
