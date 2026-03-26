@@ -967,7 +967,7 @@ export default function VideoFeed() {
             transition={{ duration: 0.25 }}
             className="absolute left-1/2 top-10 z-20 -translate-x-1/2 text-center pointer-events-none"
           >
-            <div className="inline-block rounded-2xl bg-black/40 px-6 py-3 backdrop-blur-md">
+            <div className="inline-block rounded-2xl bg-black/20 px-6 py-3 backdrop-blur-sm">
               <div className="text-4xl font-semibold tracking-tight text-white">
                 {currentWord.character}
               </div>
