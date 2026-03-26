@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSignals, SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
 import { classifyTapTiming, computeTapRateAdaptiveAlpha, loopsElapsedFromMs, updateWordState } from '../lib/memoryEngine'
 import { loadPersistedState, savePersistedState, type AppMeta } from '../lib/storage'
+import { isVideoLiked, toggleVideoLike } from '../lib/likeService'
 import { words as wordDataset } from '../data/words'
 
 const LOOP_MS = 5000
@@ -273,6 +274,9 @@ export default function VideoFeed() {
   const [showPrimerArrow, setShowPrimerArrow] = useState(false)
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
+  const [liked, setLiked] = useState(false)
+  const likedRef = useRef(false)
+  likedRef.current = liked
 
   const finalizedRef = useRef(false)
 
@@ -327,6 +331,11 @@ export default function VideoFeed() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWordId])
+
+  useEffect(() => {
+    const videoKey = currentWord.youtube_url || currentWord.video_url
+    setLiked(isVideoLiked(videoKey))
+  }, [currentWord.word_id, currentWord.youtube_url, currentWord.video_url])
 
   const chooseNextWordFromBuckets = (excludeWordId?: string) => {
     const roll = Math.random()
@@ -476,6 +485,21 @@ export default function VideoFeed() {
     }, 120)
   }
 
+  const doLikeRef = useRef<() => void>(() => {})
+  doLikeRef.current = () => {
+    if (likedRef.current) return
+    const videoKey = currentWord.youtube_url || currentWord.video_url
+    toggleVideoLike(videoKey)
+    setLiked(true)
+  }
+
+  const handleHeartToggle = useCallback(() => {
+    const videoKey = currentWord.youtube_url || currentWord.video_url
+    const nowLiked = toggleVideoLike(videoKey)
+    setLiked(nowLiked)
+    if (nowLiked) setLikeBurstKey((k) => k + 1)
+  }, [currentWord.youtube_url, currentWord.video_url])
+
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)
 
@@ -488,6 +512,7 @@ export default function VideoFeed() {
       tapSingleTimeoutRef.current = null
       lastTapUpTimeRef.current = null
       setLikeBurstKey((k) => k + 1)
+      doLikeRef.current()
     } else {
       lastTapUpTimeRef.current = now
       tapSingleTimeoutRef.current = window.setTimeout(() => {
@@ -889,6 +914,36 @@ export default function VideoFeed() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* TikTok-style right sidebar */}
+      <div className="absolute right-3 bottom-[28%] z-10 flex flex-col items-center">
+        <button
+          onClick={handleHeartToggle}
+          className="flex flex-col items-center gap-1 active:scale-110 transition-transform"
+          aria-label={liked ? 'Unlike' : 'Like'}
+        >
+          <motion.div
+            key={liked ? 'liked' : 'unliked'}
+            initial={{ scale: 0.7 }}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+          >
+            <svg viewBox="0 0 24 24" width="36" height="36" className="drop-shadow-lg">
+              <path
+                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
+                fill={liked ? '#ff2d55' : 'rgba(255,255,255,0.15)'}
+                stroke={liked ? '#ff2d55' : 'rgba(255,255,255,0.9)'}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </motion.div>
+          <span className="text-xs font-semibold text-white/90 drop-shadow">
+            {liked ? 1 : 0}
+          </span>
+        </button>
+      </div>
 
     </div>
   )
