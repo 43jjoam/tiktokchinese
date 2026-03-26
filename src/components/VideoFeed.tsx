@@ -164,6 +164,51 @@ function avatarGradient(wordId: string) {
   return `radial-gradient(1200px 800px at 20% 20%, hsla(${h1} 90% 60% / 0.35), transparent 50%), radial-gradient(900px 700px at 70% 60%, hsla(${h2} 85% 55% / 0.28), transparent 55%), linear-gradient(180deg, rgba(0,0,0,0.3), rgba(0,0,0,0.7))`
 }
 
+/** Line arrows for swipe hints — not ‹ › so they are not mistaken for buttons. */
+function SwipeHintArrowLeft({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`text-white/40 ${className ?? ''}`}
+      width={44}
+      height={44}
+      viewBox="0 0 48 48"
+      fill="none"
+      aria-hidden
+      style={{ filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.85))' }}
+    >
+      <path
+        d="M30 24H10M18 16l-8 8 8 8"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function SwipeHintArrowRight({ className }: { className?: string }) {
+  return (
+    <svg
+      className={`text-white/40 ${className ?? ''}`}
+      width={44}
+      height={44}
+      viewBox="0 0 48 48"
+      fill="none"
+      aria-hidden
+      style={{ filter: 'drop-shadow(0 1px 4px rgba(0,0,0,0.85))' }}
+    >
+      <path
+        d="M18 24h20M30 16l8 8-8 8"
+        stroke="currentColor"
+        strokeWidth="2.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function extractYouTubeId(url: string): string | null {
   try {
     const u = new URL(url)
@@ -995,30 +1040,20 @@ export default function VideoFeed() {
         )}
       </div>
 
-      {/* Side chevrons — under gesture layer (z-5) so swipes still hit the full-screen handler; first ~40 sessions. */}
-      {videoReady && meta.sessionsServed < 40 && (
+      {/* Swipe hint arrows — first 3 feed cards only; under gesture layer (z-5). */}
+      {videoReady && sessionVideoIndex < 3 && (
         <div
           className="pointer-events-none absolute inset-0 z-[4]"
           aria-hidden
         >
-          <div className="absolute left-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 pl-1 text-center sm:left-3 sm:pl-0">
-            <span
-              className="text-3xl font-extralight leading-none text-white/30"
-              style={{ textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}
-            >
-              ‹
-            </span>
+          <div className="absolute left-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1.5 pl-1 text-center sm:left-3 sm:pl-0">
+            <SwipeHintArrowLeft />
             <span className="max-w-[4.25rem] text-[10px] font-medium leading-tight text-white/45 sm:max-w-[5rem]">
               Too hard / skip
             </span>
           </div>
-          <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 pr-1 text-center sm:right-3 sm:pr-0">
-            <span
-              className="text-3xl font-extralight leading-none text-white/30"
-              style={{ textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}
-            >
-              ›
-            </span>
+          <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1.5 pr-1 text-center sm:right-3 sm:pr-0">
+            <SwipeHintArrowRight />
             <span className="max-w-[4.25rem] text-[10px] font-medium leading-tight text-white/45 sm:max-w-[5rem]">
               Know it
             </span>
