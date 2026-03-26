@@ -589,7 +589,7 @@ export default function VideoFeed() {
     const startSessionMs = sessionStartMsRef.current
 
     let primerTimer: number | null = null
-    if (sessionVideoIndex === 1) {
+    if (sessionVideoIndex === 0) {
       primerTimer = window.setTimeout(() => setShowPrimerTapHint(true), 3000)
     }
 
@@ -1074,16 +1074,16 @@ export default function VideoFeed() {
         role="application"
         aria-label="Character feed. Swipe right or up if you know the word; swipe left or down if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
       >
-        {/* Onboarding primer: "Tap for meaning" hint on Video 2 */}
+        {/* Onboarding primer: centered “Tap for meaning” on first video only */}
         <AnimatePresence>
           {showPrimerTapHint && (
             <motion.div
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 6 }}
-              className="absolute left-1/2 top-[60%] -translate-x-1/2"
+              exit={{ opacity: 0, y: 8 }}
+              className="pointer-events-none absolute left-1/2 top-1/2 z-[1] w-[min(88vw,280px)] -translate-x-1/2 -translate-y-1/2 px-3"
             >
-              <div className="rounded-full bg-white/15 px-5 py-3 text-sm font-semibold backdrop-blur">
+              <div className="rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-center text-sm font-semibold text-white/95 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
                 Tap for meaning
               </div>
             </motion.div>
