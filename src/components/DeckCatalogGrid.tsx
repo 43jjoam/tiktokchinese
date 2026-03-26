@@ -69,7 +69,7 @@ export default function DeckCatalogGrid({ decks }: Props) {
                 {item.title}
               </div>
               <div className={`text-[10px] truncate ${owned ? 'text-white/60' : 'text-white/30'}`}>
-                {owned ? 'Purchased · tap to open' : 'Not purchased · tap to shop on Bestling'}
+                {owned ? 'Purchased · tap to open' : 'Not purchased · tap for product page'}
               </div>
             </div>
           </button>

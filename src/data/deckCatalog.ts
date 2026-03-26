@@ -17,15 +17,15 @@ function matchPinyin(name: string): boolean {
   return /\bpinyin\b/i.test(name)
 }
 
-const searchUrl = (q: string) =>
-  `https://bestling.net/search?q=${encodeURIComponent(q)}`
+/** Direct Shopify product pages on bestling.net (grey cards open these). */
+const product = (handle: string) => `https://bestling.net/products/${handle}`
 
 export const DECK_CATALOG: CatalogDeck[] = [
   {
     key: 'hsk-1',
     title: 'HSK 1',
     subtitle: 'Digital flashcards',
-    shopUrl: searchUrl('HSK 1 Digital Flashcards'),
+    shopUrl: product('hsk-1-digital-flashcards'),
     matches: (d) => matchHskLevel(d.name, 1),
     accent: 'emerald',
   },
@@ -33,7 +33,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-2',
     title: 'HSK 2',
     subtitle: 'Digital flashcards',
-    shopUrl: searchUrl('HSK 2 Digital Flashcards'),
+    shopUrl: product('hsk-2-digital-flashcards'),
     matches: (d) => matchHskLevel(d.name, 2),
     accent: 'green',
   },
@@ -41,7 +41,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-3',
     title: 'HSK 3',
     subtitle: 'Digital flashcards',
-    shopUrl: searchUrl('HSK 3 Digital Flashcards'),
+    shopUrl: product('hsk-3-digital-flashcards'),
     matches: (d) => matchHskLevel(d.name, 3),
     accent: 'teal',
   },
@@ -49,7 +49,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-4',
     title: 'HSK 4',
     subtitle: 'Digital flashcards',
-    shopUrl: searchUrl('HSK 4 Digital Flashcards'),
+    shopUrl: product('hsk-4-digital-flashcards'),
     matches: (d) => matchHskLevel(d.name, 4),
     accent: 'sky',
   },
@@ -57,7 +57,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-5',
     title: 'HSK 5',
     subtitle: 'Digital flashcards',
-    shopUrl: searchUrl('HSK 5 Digital Flashcards'),
+    shopUrl: product('hsk-5-digital-flashcards'),
     matches: (d) => matchHskLevel(d.name, 5),
     accent: 'indigo',
   },
@@ -65,7 +65,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-6',
     title: 'HSK 6',
     subtitle: 'Digital flashcards',
-    shopUrl: searchUrl('HSK 6 Digital Flashcards'),
+    shopUrl: product('hsk-6-digital-flashcards'),
     matches: (d) => matchHskLevel(d.name, 6),
     accent: 'violet',
   },
@@ -73,7 +73,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'pinyin',
     title: 'Pinyin',
     subtitle: 'Flashcards',
-    shopUrl: searchUrl('Pinyin Flashcards'),
+    shopUrl: product('pinyin-flashcards'),
     matches: (d) => matchPinyin(d.name),
     accent: 'rose',
   },
