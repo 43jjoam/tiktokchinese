@@ -8,6 +8,39 @@ import { words as wordDataset } from '../data/words'
 
 const LOOP_MS = 5000
 
+/* ── Audio: tap sound + Chinese TTS ── */
+let audioCtx: AudioContext | null = null
+
+function playTapSound() {
+  try {
+    if (!audioCtx) audioCtx = new AudioContext()
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.type = 'sine'
+    osc.frequency.value = 1200
+    gain.gain.setValueAtTime(0.15, audioCtx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.08)
+    osc.connect(gain).connect(audioCtx.destination)
+    osc.start()
+    osc.stop(audioCtx.currentTime + 0.08)
+  } catch {}
+}
+
+function speakChinese(text: string) {
+  try {
+    if (!window.speechSynthesis) return
+    window.speechSynthesis.cancel()
+    const utter = new SpeechSynthesisUtterance(text)
+    utter.lang = 'zh-CN'
+    utter.rate = 0.85
+    utter.volume = 1.0
+    const voices = window.speechSynthesis.getVoices()
+    const zhVoice = voices.find((v) => v.lang.startsWith('zh'))
+    if (zhVoice) utter.voice = zhVoice
+    window.speechSynthesis.speak(utter)
+  } catch {}
+}
+
 type SupportedLocale = 'en' | 'zh-TW' | 'th'
 
 function detectSupportedLocale(): SupportedLocale {
@@ -240,6 +273,8 @@ export default function VideoFeed() {
   const [sessionVideoIndex, setSessionVideoIndex] = useState(0)
   const [currentWordId, setCurrentWordId] = useState(() => words[0]?.word_id ?? '')
   const currentWord = useMemo(() => words.find((w) => w.word_id === currentWordId) ?? words[0], [words, currentWordId])
+  const currentWordRef = useRef(currentWord)
+  currentWordRef.current = currentWord
 
   const elapsedMsRef = useRef(0)
   const sessionStartMsRef = useRef<number>(Date.now())
@@ -542,6 +577,8 @@ export default function VideoFeed() {
       tapSingleTimeoutRef.current = window.setTimeout(() => {
         setL1LockKey((k) => k + 1)
         setL1Visible(true)
+        playTapSound()
+        speakChinese(currentWordRef.current.character)
         window.setTimeout(() => setL1Visible(false), 2000)
         tapSingleTimeoutRef.current = null
       }, DOUBLE_GAP_MS)
