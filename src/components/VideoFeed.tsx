@@ -135,9 +135,15 @@ function pickNextWord(args: {
     return pickFrom(bucketA) ?? fallback()
   }
 
-  // First ~40 sessions: bias toward bucket A so new users see more different characters
-  // before the usual 10% "new" slice dominates exploration.
-  const earlyOnboarding = sessionsServed < 40 && bucketA.length > 0
+  // First 10 swipe sessions: only never-seen words while bucket A is non-empty, so the feed feels
+  // like pure discovery; revision (B/C) starts after session 10.
+  if (sessionsServed < 10 && bucketA.length > 0) {
+    return pickFrom(bucketA) ?? fallback()
+  }
+
+  // Sessions 10–39: bias toward A vs B/C so exploration stays higher than PRD 10% "new" slice.
+  const earlyOnboarding =
+    sessionsServed >= 10 && sessionsServed < 40 && bucketA.length > 0
   const aFirstThreshold = earlyOnboarding ? 0.35 : 0.1
   const bFirstThreshold = earlyOnboarding ? 0.82 : 0.75
 
