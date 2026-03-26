@@ -215,6 +215,17 @@ function YouTubePlayer({
   useEffect(() => {
     let destroyed = false
     firedRef.current = false
+    let playingFallbackTimer: number | null = null
+
+    const firePlayingOnce = () => {
+      if (destroyed || firedRef.current) return
+      firedRef.current = true
+      if (playingFallbackTimer !== null) {
+        window.clearTimeout(playingFallbackTimer)
+        playingFallbackTimer = null
+      }
+      onPlayingRef.current()
+    }
 
     const init = async () => {
       await ensureYouTubeAPI()
@@ -248,12 +259,13 @@ function YouTubePlayer({
               e.target.mute()
               e.target.playVideo()
             } catch {}
+            // Mobile / multi-embed: PLAYING sometimes never fires; still unblock UI after init.
+            playingFallbackTimer = window.setTimeout(() => firePlayingOnce(), 1000)
           },
           onStateChange: (e: any) => {
             const YT = (window as any).YT
-            if (e.data === YT.PlayerState.PLAYING && !firedRef.current) {
-              firedRef.current = true
-              onPlayingRef.current()
+            if (e.data === YT.PlayerState.PLAYING) {
+              firePlayingOnce()
             }
             if (e.data === YT.PlayerState.ENDED) {
               e.target.seekTo(0)
@@ -276,6 +288,7 @@ function YouTubePlayer({
 
     return () => {
       destroyed = true
+      if (playingFallbackTimer !== null) window.clearTimeout(playingFallbackTimer)
       if (playerRef.current) {
         try { playerRef.current.destroy() } catch {}
         playerRef.current = null
@@ -827,40 +840,6 @@ export default function VideoFeed() {
     }
   }
 
-  const preloadWords = useMemo(() => {
-    const upcoming: WordMetadata[] = []
-    const seen = new Set<string>([currentWord.word_id])
-    const candidates = words.filter((w) => !seen.has(w.word_id))
-    for (let i = 0; i < 3 && candidates.length > 0; i++) {
-      const roll = Math.random()
-      const pick = pickNextWord({
-        words: candidates,
-        wordStates,
-        roll,
-        sessionsServed: meta.sessionsServed,
-      })
-      if (seen.has(pick.word_id)) break
-      seen.add(pick.word_id)
-      upcoming.push(pick)
-      candidates.splice(candidates.indexOf(pick), 1)
-    }
-    return upcoming
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentWord.word_id, meta.sessionsServed, wordStates])
-
-  const preloadSrcs = useMemo(
-    () =>
-      preloadWords
-        .map((w) => {
-          if (!w.youtube_url) return null
-          const id = extractYouTubeId(w.youtube_url)
-          if (!id) return null
-          return `https://www.youtube.com/embed/${id}?autoplay=0&mute=1&controls=0&playsinline=1&modestbranding=1&rel=0`
-        })
-        .filter(Boolean) as string[],
-    [preloadWords],
-  )
-
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-black">
       <div
@@ -872,7 +851,7 @@ export default function VideoFeed() {
       <div className="absolute inset-0 z-[1]" style={{ pointerEvents: 'none' }}>
         {ytId ? (
           <YouTubePlayer
-            key={ytId}
+            key={`${currentWord.word_id}:${ytId}`}
             videoId={ytId}
             onPlaying={() => setVideoReady(true)}
           />
@@ -892,22 +871,7 @@ export default function VideoFeed() {
         )}
       </div>
 
-      {/* Hidden preload iframes — no loading="lazy" (delays warm-up on mobile) */}
-      <div
-        className="fixed pointer-events-none overflow-hidden opacity-0"
-        style={{ width: 4, height: 4, bottom: 0, right: 0, zIndex: -1 }}
-        aria-hidden
-      >
-        {preloadSrcs.map((src) => (
-          <iframe
-            key={src}
-            src={src}
-            title="preload"
-            style={{ width: 4, height: 4, border: 0 }}
-            tabIndex={-1}
-          />
-        ))}
-      </div>
+      {/* No extra YouTube embed preloads: several concurrent embeds break playback on many phones after 1–2 videos. */}
 
       {/* Gesture capture surface — sits on top of video, captures all touch/pointer input */}
       <div
