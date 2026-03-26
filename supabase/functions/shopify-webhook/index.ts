@@ -91,7 +91,7 @@ async function sendEmail(to: string, code: string, deckName: string) {
           </div>
           <p><strong>How to activate:</strong></p>
           <ol>
-            <li>Open the app at <a href="https://43jjoam.github.io/tiktokchinese/">43jjoam.github.io/tiktokchinese</a></li>
+            <li>Open the app at <a href="https://chineseflash.com/">chineseflash.com</a></li>
             <li>Tap the <strong>Library</strong> tab at the bottom</li>
             <li>Enter your code and tap <strong>Activate</strong></li>
           </ol>
