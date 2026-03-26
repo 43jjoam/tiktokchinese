@@ -934,8 +934,8 @@ export default function VideoFeed() {
         )}
       </AnimatePresence>
 
-      {/* TikTok-style right sidebar */}
-      <div className="absolute right-3 bottom-[28%] z-10 flex flex-col items-center">
+      {/* TikTok-style right sidebar — raised above bottom nav */}
+      <div className="absolute right-3 z-10 flex flex-col items-center" style={{ bottom: 'calc(28% + 56px)' }}>
         <button
           onClick={handleHeartToggle}
           className="flex flex-col items-center gap-1 active:scale-110 transition-transform"
