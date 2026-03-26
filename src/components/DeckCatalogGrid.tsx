@@ -25,22 +25,21 @@ export default function DeckCatalogGrid({ decks, onSelectOwnedDeck }: Props) {
       >
         <div className="relative aspect-[3/4] w-full overflow-hidden">
           {builtin.cover_image_url ? (
-            <>
-              <img
-                src={builtin.cover_image_url}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 bg-black/45" />
-            </>
+            <img
+              src={builtin.cover_image_url}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
           ) : (
-            <div className={`absolute inset-0 bg-gradient-to-br ${builtinBar}`} />
+            <>
+              <div className={`absolute inset-0 bg-gradient-to-br ${builtinBar}`} />
+              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center p-3 text-center">
+                <span className="text-xl font-bold leading-tight tracking-tight text-white drop-shadow">
+                  {builtin.name}
+                </span>
+              </div>
+            </>
           )}
-          <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center p-3 text-center">
-            <span className="text-xl font-bold leading-tight tracking-tight text-white drop-shadow">
-              {builtin.name}
-            </span>
-          </div>
         </div>
         <div className="px-3 py-2">
           <div className="truncate text-xs font-semibold text-white">{builtin.name}</div>
