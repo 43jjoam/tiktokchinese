@@ -900,16 +900,9 @@ export default function VideoFeed() {
 
       const loopsElapsed = loopsElapsedFromMs(elapsedMsRef.current)
 
-      // Horizontal swipe
+      // Horizontal swipe only (vertical swipes are ignored — avoids confusion with left/right)
       if (absDx > 30 && absDx > absDy * 0.6 && duration < 1200) {
         const dir: SwipeDirection = dx < 0 ? 'left' : 'right'
-        finalizeSessionRef.current(dir)
-        return
-      }
-
-      // Vertical swipe (TikTok-style: swipe up = advance/right, swipe down = back/left)
-      if (absDy > 30 && absDy > absDx * 0.6 && duration < 1200) {
-        const dir: SwipeDirection = dy < 0 ? 'right' : 'left'
         finalizeSessionRef.current(dir)
         return
       }
@@ -987,12 +980,6 @@ export default function VideoFeed() {
       return
     }
 
-    if (absDy > 30 && absDy > absDx * 0.6 && duration < 1200) {
-      const dir: SwipeDirection = dy < 0 ? 'right' : 'left'
-      finalizeSessionRef.current(dir)
-      return
-    }
-
     if (absDx < 15 && absDy < 15 && duration < 400) {
       handleTapGesture(loopsElapsed)
     }
@@ -1047,7 +1034,7 @@ export default function VideoFeed() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         role="application"
-        aria-label="Character feed. Swipe right or up if you know the word; swipe left or down if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
+        aria-label="Character feed. Swipe right if you know the word; swipe left if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
       >
         {/* Center via flex on full-screen layer — framer `y` on same node as translate-x-50% was killing horizontal center */}
         <AnimatePresence>
@@ -1121,7 +1108,7 @@ export default function VideoFeed() {
                   Radical details are demo-only in this MVP.
                 </div>
                 <div className="mt-5 text-xs opacity-70">
-                  Right or up = you know it. Left or down = too hard or not interested. Tap for meaning.
+                  Swipe right = you know it. Swipe left = too hard or not interested. Tap for meaning.
                 </div>
               </motion.div>
             </motion.div>

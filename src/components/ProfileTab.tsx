@@ -232,16 +232,12 @@ export default function ProfileTab() {
               <span className="font-medium text-green-300/90">Know it</span>
               <span className="text-white/55"> — swipe </span>
               <span className="text-white/90">right</span>
-              <span className="text-white/55"> or </span>
-              <span className="text-white/90">up</span>
               <span className="text-white/55">. The app treats that as “I know this word.”</span>
             </li>
             <li>
               <span className="font-medium text-orange-300/90">Not now</span>
               <span className="text-white/55"> — swipe </span>
               <span className="text-white/90">left</span>
-              <span className="text-white/55"> or </span>
-              <span className="text-white/90">down</span>
               <span className="text-white/55">
                 {' '}
                 if it feels too hard, you are not interested, or you want to skip for now.
