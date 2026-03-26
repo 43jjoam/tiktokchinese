@@ -1,5 +1,6 @@
 import type { VideoQualityState, WordState } from './types'
 
+const KEY_CURRENT_WORD_ID = 'stealthSwipe.currentWordId.v1'
 const KEY_WORD_STATES = 'stealthSwipe.wordStates.v1'
 const KEY_VIDEO_QUALITY = 'stealthSwipe.videoQuality.v1'
 const KEY_APP_META = 'stealthSwipe.appMeta.v1'
@@ -24,6 +25,22 @@ const defaultMeta: AppMeta = {
   first20Tapped: 0,
   alphaFrozen: false,
   alphaValue: 1.0,
+}
+
+export function loadCurrentWordId(): string | null {
+  try {
+    return localStorage.getItem(KEY_CURRENT_WORD_ID)
+  } catch {
+    return null
+  }
+}
+
+export function saveCurrentWordId(wordId: string) {
+  try {
+    localStorage.setItem(KEY_CURRENT_WORD_ID, wordId)
+  } catch {
+    // ignore
+  }
 }
 
 export function loadPersistedState(): PersistedState {

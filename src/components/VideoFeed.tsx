@@ -2,7 +2,13 @@ import { AnimatePresence, motion } from 'framer-motion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSignals, SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
 import { classifyTapTiming, computeTapRateAdaptiveAlpha, loopsElapsedFromMs, updateWordState } from '../lib/memoryEngine'
-import { loadPersistedState, savePersistedState, type AppMeta } from '../lib/storage'
+import {
+  loadCurrentWordId,
+  loadPersistedState,
+  saveCurrentWordId,
+  savePersistedState,
+  type AppMeta,
+} from '../lib/storage'
 import { getLikeStatus, toggleLike } from '../lib/likeService'
 import { words as wordDataset } from '../data/words'
 
@@ -80,6 +86,11 @@ function makeWordStateSeed(word: WordMetadata): WordState {
   }
 }
 
+function pickRandomWord(ws: WordMetadata[]): WordMetadata {
+  const list = ws.length ? ws : wordDataset
+  return list[Math.floor(Math.random() * list.length)]
+}
+
 function pickNextWord(args: {
   words: WordMetadata[]
   wordStates: Record<string, WordState>
@@ -88,6 +99,7 @@ function pickNextWord(args: {
   const { words, wordStates, roll } = args
 
   const MASTERY_THRESHOLD = 3.0
+  const fallback = () => pickRandomWord(words)
 
   const isDepsMastered = (w: WordMetadata) => {
     if (!w.dependencies.length) return true
@@ -113,9 +125,9 @@ function pickNextWord(args: {
     return arr[Math.floor(Math.random() * arr.length)]
   }
 
-  if (roll < 0.1) return pickFrom(bucketA) ?? pickFrom(bucketB) ?? pickFrom(bucketC) ?? words[0]
-  if (roll < 0.75) return pickFrom(bucketB) ?? pickFrom(bucketC) ?? pickFrom(bucketA) ?? words[0]
-  return pickFrom(bucketC) ?? pickFrom(bucketB) ?? pickFrom(bucketA) ?? words[0]
+  if (roll < 0.1) return pickFrom(bucketA) ?? pickFrom(bucketB) ?? pickFrom(bucketC) ?? fallback()
+  if (roll < 0.75) return pickFrom(bucketB) ?? pickFrom(bucketC) ?? pickFrom(bucketA) ?? fallback()
+  return pickFrom(bucketC) ?? pickFrom(bucketB) ?? pickFrom(bucketA) ?? fallback()
 }
 
 function avatarGradient(wordId: string) {
@@ -274,8 +286,27 @@ export default function VideoFeed() {
   const { wordStates, videoQuality, meta } = persisted
 
   const [sessionVideoIndex, setSessionVideoIndex] = useState(0)
-  const [currentWordId, setCurrentWordId] = useState(() => words[0]?.word_id ?? '')
-  const currentWord = useMemo(() => words.find((w) => w.word_id === currentWordId) ?? words[0], [words, currentWordId])
+  const [currentWordId, setCurrentWordId] = useState(() => {
+    const saved = loadCurrentWordId()
+    if (saved && words.some((w) => w.word_id === saved)) return saved
+    return pickRandomWord(words).word_id
+  })
+  const currentWord = useMemo(() => {
+    const found = words.find((w) => w.word_id === currentWordId)
+    if (found) return found
+    return pickRandomWord(words)
+  }, [words, currentWordId])
+
+  useEffect(() => {
+    if (currentWordId && !words.some((w) => w.word_id === currentWordId)) {
+      setCurrentWordId(pickRandomWord(words).word_id)
+    }
+  }, [words, currentWordId])
+
+  useEffect(() => {
+    if (currentWordId) saveCurrentWordId(currentWordId)
+  }, [currentWordId])
+
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
 
@@ -413,7 +444,7 @@ export default function VideoFeed() {
   const chooseNextWordFromBuckets = (excludeWordId?: string) => {
     const roll = Math.random()
     const candidates = excludeWordId ? words.filter((w) => w.word_id !== excludeWordId) : words
-    if (candidates.length === 0) return words[0]
+    if (candidates.length === 0) return pickRandomWord(words)
     const next = pickNextWord({ words: candidates, wordStates, roll })
     return next
   }
