@@ -1074,16 +1074,17 @@ export default function VideoFeed() {
         role="application"
         aria-label="Character feed. Swipe right or up if you know the word; swipe left or down if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
       >
-        {/* Onboarding primer: centered “Tap for meaning” on first video only */}
+        {/* Center via flex on full-screen layer — framer `y` on same node as translate-x-50% was killing horizontal center */}
         <AnimatePresence>
           {showPrimerTapHint && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              key="primer-tap"
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 8 }}
-              className="pointer-events-none absolute left-1/2 top-1/2 z-[1] w-[min(88vw,280px)] -translate-x-1/2 -translate-y-1/2 px-3"
+              exit={{ opacity: 0, y: 12 }}
+              className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-4"
             >
-              <div className="rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-center text-sm font-semibold text-white/95 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+              <div className="w-full max-w-[280px] rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-center text-sm font-semibold text-white/95 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
                 Tap for meaning
               </div>
             </motion.div>
