@@ -995,6 +995,37 @@ export default function VideoFeed() {
         )}
       </div>
 
+      {/* Side chevrons — under gesture layer (z-5) so swipes still hit the full-screen handler; first ~40 sessions. */}
+      {videoReady && meta.sessionsServed < 40 && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[4]"
+          aria-hidden
+        >
+          <div className="absolute left-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 pl-1 text-center sm:left-3 sm:pl-0">
+            <span
+              className="text-3xl font-extralight leading-none text-white/30"
+              style={{ textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}
+            >
+              ‹
+            </span>
+            <span className="max-w-[4.25rem] text-[10px] font-medium leading-tight text-white/45 sm:max-w-[5rem]">
+              Too hard / skip
+            </span>
+          </div>
+          <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col items-center gap-1 pr-1 text-center sm:right-3 sm:pr-0">
+            <span
+              className="text-3xl font-extralight leading-none text-white/30"
+              style={{ textShadow: '0 1px 8px rgba(0,0,0,0.8)' }}
+            >
+              ›
+            </span>
+            <span className="max-w-[4.25rem] text-[10px] font-medium leading-tight text-white/45 sm:max-w-[5rem]">
+              Know it
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* No extra YouTube embed preloads: several concurrent embeds break playback on many phones after 1–2 videos. */}
 
       {/* Gesture capture surface — sits on top of video, captures all touch/pointer input */}
