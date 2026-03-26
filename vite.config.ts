@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/tiktokchinese/',
+  base: process.env.GITHUB_ACTIONS ? '/tiktokchinese/' : '/',
   server: {
     port: 5173,
   },
