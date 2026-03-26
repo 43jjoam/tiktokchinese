@@ -277,6 +277,7 @@ export default function VideoFeed() {
   }, [])
   const [longPressVisible, setLongPressVisible] = useState(false)
   const [showTapGhostHint, setShowTapGhostHint] = useState(false)
+  const ghostHintFiredRef = useRef(false)
   const [showPrimerArrow, setShowPrimerArrow] = useState(false)
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
@@ -295,6 +296,7 @@ export default function VideoFeed() {
     setL1Visible(false)
     setLongPressVisible(false)
     setShowTapGhostHint(false)
+    ghostHintFiredRef.current = false
     setShowPrimerArrow(false)
     setShowPrimerTapHint(false)
     setVideoReady(false)
@@ -323,7 +325,8 @@ export default function VideoFeed() {
       elapsedMsRef.current = elapsed
       const loopsElapsed = loopsElapsedFromMs(elapsed)
 
-      if (!finalizedRef.current && !tapOccurredRef.current && loopsElapsed >= 10) {
+      if (!ghostHintFiredRef.current && !finalizedRef.current && !tapOccurredRef.current && loopsElapsed >= 10) {
+        ghostHintFiredRef.current = true
         setShowTapGhostHint(true)
       }
 
