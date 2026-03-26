@@ -16,20 +16,6 @@ export const words: WordMetadata[] = [
     "dependencies": []
   },
   {
-    "word_id": "M-mom-02__妈",
-    "character": "妈",
-    "pinyin": "mā",
-    "l1_meanings": {
-      "en": "Mom",
-      "zh-TW": "妈",
-      "th": "แม่ (mâe)"
-    },
-    "video_url": "/videos/M-mom-02.mp4",
-    "youtube_url": "https://youtube.com/shorts/1CJSOntCiAU?feature=share",
-    "base_complexity": 1.0,
-    "dependencies": []
-  },
-  {
     "word_id": "M-sendout-04",
     "character": "发",
     "pinyin": "fā",
@@ -936,30 +922,6 @@ export const words: WordMetadata[] = [
     },
     "video_url": "/videos/M-toblock-71.mp4",
     "youtube_url": "https://youtube.com/shorts/IIyGwXGe7mM?feature=share",
-    "base_complexity": 1.0,
-    "dependencies": []
-  },
-  {
-    "word_id": "M-dad-01__爸爸",
-    "character": "爸爸",
-    "pinyin": "bà ba",
-    "l1_meanings": {
-      "zh-TW": "爸爸"
-    },
-    "video_url": "/videos/M-dad-01.mp4",
-    "youtube_url": "https://youtube.com/shorts/_HGj0C7e3jc?feature=share",
-    "base_complexity": 1.0,
-    "dependencies": []
-  },
-  {
-    "word_id": "M-mom-02__妈妈",
-    "character": "妈妈",
-    "pinyin": "mā ma",
-    "l1_meanings": {
-      "zh-TW": "妈妈"
-    },
-    "video_url": "/videos/M-mom-02.mp4",
-    "youtube_url": "https://youtube.com/shorts/1CJSOntCiAU?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   }
