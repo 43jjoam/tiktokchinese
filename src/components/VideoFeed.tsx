@@ -956,9 +956,9 @@ export default function VideoFeed() {
         )}
       </AnimatePresence>
 
-      {/* Permanent word overlay (top-center) — only visible once video has loaded */}
+      {/* Permanent word overlay (top-center) — hidden when meaning overlay is showing */}
       <AnimatePresence>
-        {videoReady && (
+        {videoReady && !l1Visible && (
           <motion.div
             key={currentWord.word_id}
             initial={{ opacity: 0 }}
