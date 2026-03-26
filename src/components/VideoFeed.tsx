@@ -1036,31 +1036,6 @@ export default function VideoFeed() {
         )}
       </div>
 
-      {/* Swipe hint arrows — frosted glass pills, first 3 cards only; under gesture layer (z-5). */}
-      {videoReady && sessionVideoIndex < 3 && (
-        <div
-          className="pointer-events-none absolute inset-0 z-[4]"
-          aria-hidden
-        >
-          <div className="absolute left-2 top-1/2 -translate-y-1/2 sm:left-4">
-            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
-              <SwipeHintArrowLeft />
-              <span className="text-[10px] font-medium leading-tight text-white/80">
-                Too hard / skip
-              </span>
-            </div>
-          </div>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 sm:right-4">
-            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
-              <SwipeHintArrowRight />
-              <span className="text-[10px] font-medium leading-tight text-white/80">
-                Know it
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* No extra YouTube embed preloads: several concurrent embeds break playback on many phones after 1–2 videos. */}
 
       {/* Gesture capture surface — sits on top of video, captures all touch/pointer input */}
@@ -1084,7 +1059,7 @@ export default function VideoFeed() {
               exit={{ opacity: 0, y: 12 }}
               className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-4"
             >
-              <div className="w-full max-w-[280px] rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-center text-sm font-semibold text-white/95 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+              <div className="w-max max-w-[85vw] rounded-2xl border border-white/20 bg-white/10 px-6 py-3.5 text-center text-sm font-semibold text-white/95 shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
                 Tap for meaning
               </div>
             </motion.div>
@@ -1154,6 +1129,31 @@ export default function VideoFeed() {
         </AnimatePresence>
 
       </div>
+
+      {/* Swipe hint arrows — above gesture (z-6) so center tap primer does not paint over them; still non-interactive. */}
+      {videoReady && sessionVideoIndex < 3 && (
+        <div
+          className="pointer-events-none absolute inset-0 z-[6]"
+          aria-hidden
+        >
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 sm:left-4">
+            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+              <SwipeHintArrowLeft />
+              <span className="text-[10px] font-medium leading-tight text-white/80">
+                Too hard / skip
+              </span>
+            </div>
+          </div>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 sm:right-4">
+            <div className="flex max-w-[5.5rem] flex-col items-center gap-1.5 rounded-2xl border border-white/20 bg-white/10 px-3 py-3 text-center shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-md supports-[backdrop-filter]:bg-white/[0.08]">
+              <SwipeHintArrowRight />
+              <span className="text-[10px] font-medium leading-tight text-white/80">
+                Know it
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* L1 meaning overlay — absolutely centered within the h-dvh root container */}
       <AnimatePresence>
