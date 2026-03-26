@@ -216,72 +216,33 @@ function YouTubePlayer({
   const playerRef = useRef<any>(null)
   const onPlayingRef = useRef(onPlaying)
   onPlayingRef.current = onPlaying
+  const videoIdRef = useRef(videoId)
+  videoIdRef.current = videoId
   const firedRef = useRef(false)
 
+  useEffect(
+    () => () => {
+      if (playerRef.current) {
+        try { playerRef.current.destroy() } catch {}
+        playerRef.current = null
+      }
+    },
+    [],
+  )
+
   useEffect(() => {
-    let destroyed = false
-    firedRef.current = false
+    let cancelled = false
     let playingFallbackTimer: number | null = null
 
-    const firePlayingOnce = () => {
-      if (destroyed || firedRef.current) return
-      firedRef.current = true
+    const clearFallback = () => {
       if (playingFallbackTimer !== null) {
         window.clearTimeout(playingFallbackTimer)
         playingFallbackTimer = null
       }
-      onPlayingRef.current()
     }
 
-    const init = async () => {
-      await ensureYouTubeAPI()
-      if (destroyed || !hostRef.current) return
-
-      const holder = document.createElement('div')
-      hostRef.current.innerHTML = ''
-      hostRef.current.appendChild(holder)
-
-      const origin =
-        typeof window !== 'undefined' && window.location?.origin
-          ? window.location.origin
-          : undefined
-
-      playerRef.current = new (window as any).YT.Player(holder, {
-        videoId,
-        playerVars: {
-          autoplay: 1,
-          mute: 1,
-          controls: 0,
-          playsinline: 1,
-          modestbranding: 1,
-          rel: 0,
-          fs: 0,
-          loop: 0,
-          ...(origin ? { origin } : {}),
-        },
-        events: {
-          onReady: (e: any) => {
-            try {
-              e.target.mute()
-              e.target.playVideo()
-            } catch {}
-            // Mobile / multi-embed: PLAYING sometimes never fires; still unblock UI after init.
-            playingFallbackTimer = window.setTimeout(() => firePlayingOnce(), 1000)
-          },
-          onStateChange: (e: any) => {
-            const YT = (window as any).YT
-            if (e.data === YT.PlayerState.PLAYING) {
-              firePlayingOnce()
-            }
-            if (e.data === YT.PlayerState.ENDED) {
-              e.target.seekTo(0)
-              e.target.playVideo()
-            }
-          },
-        },
-      })
-
-      const iframe = hostRef.current.querySelector('iframe')
+    const styleIframe = () => {
+      const iframe = hostRef.current?.querySelector('iframe')
       if (iframe) {
         iframe.style.pointerEvents = 'none'
         iframe.style.width = '100%'
@@ -290,15 +251,98 @@ function YouTubePlayer({
       }
     }
 
-    init()
+    const firePlayingOnce = () => {
+      if (cancelled || firedRef.current) return
+      firedRef.current = true
+      clearFallback()
+      onPlayingRef.current()
+    }
+
+    const armFallback = () => {
+      clearFallback()
+      firedRef.current = false
+      playingFallbackTimer = window.setTimeout(() => firePlayingOnce(), 1500)
+    }
+
+    const matchesCurrentVideo = (player: any) => {
+      try {
+        const vid = player?.getVideoData?.()?.video_id
+        return !vid || vid === videoIdRef.current
+      } catch {
+        return true
+      }
+    }
+
+    ;(async () => {
+      await ensureYouTubeAPI()
+      if (cancelled || !hostRef.current) return
+
+      if (!playerRef.current) {
+        const holder = document.createElement('div')
+        hostRef.current.innerHTML = ''
+        hostRef.current.appendChild(holder)
+
+        const origin =
+          typeof window !== 'undefined' && window.location?.origin
+            ? window.location.origin
+            : undefined
+
+        playerRef.current = new (window as any).YT.Player(holder, {
+          videoId,
+          playerVars: {
+            autoplay: 1,
+            mute: 1,
+            controls: 0,
+            playsinline: 1,
+            modestbranding: 1,
+            rel: 0,
+            fs: 0,
+            loop: 0,
+            ...(origin ? { origin } : {}),
+          },
+          events: {
+            onReady: (e: any) => {
+              if (cancelled) return
+              try {
+                e.target.mute()
+                e.target.playVideo()
+              } catch {}
+              armFallback()
+              styleIframe()
+            },
+            onStateChange: (e: any) => {
+              if (cancelled || !matchesCurrentVideo(e.target)) return
+              const YT = (window as any).YT
+              if (e.data === YT.PlayerState.PLAYING) {
+                firePlayingOnce()
+              }
+              if (e.data === YT.PlayerState.ENDED) {
+                e.target.seekTo(0)
+                e.target.playVideo()
+              }
+            },
+            onError: () => {
+              if (!cancelled) firePlayingOnce()
+            },
+          },
+        })
+        styleIframe()
+      } else {
+        armFallback()
+        try {
+          playerRef.current.loadVideoById(videoId)
+          playerRef.current.mute()
+          playerRef.current.playVideo()
+        } catch {
+          firePlayingOnce()
+        }
+        styleIframe()
+      }
+    })()
 
     return () => {
-      destroyed = true
-      if (playingFallbackTimer !== null) window.clearTimeout(playingFallbackTimer)
-      if (playerRef.current) {
-        try { playerRef.current.destroy() } catch {}
-        playerRef.current = null
-      }
+      cancelled = true
+      clearFallback()
     }
   }, [videoId])
 
@@ -857,7 +901,6 @@ export default function VideoFeed() {
       <div className="absolute inset-0 z-[1]" style={{ pointerEvents: 'none' }}>
         {ytId ? (
           <YouTubePlayer
-            key={`${currentWord.word_id}:${ytId}`}
             videoId={ytId}
             onPlaying={() => setVideoReady(true)}
           />
