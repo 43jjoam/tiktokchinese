@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { activateCode, getActivatedDecks, type DeckInfo } from '../lib/deckService'
+import DeckCatalogGrid from './DeckCatalogGrid'
 
 const SHOP_URL =
   'https://bestling.net/collections/all?filter.p.product_type=flashcards&sort_by=title-ascending'
@@ -82,38 +83,15 @@ export default function LibraryTab() {
         )}
       </div>
 
-      {/* Owned decks grid */}
+      {/* HSK 1–6 + Pinyin: grey until purchased, colored when activated */}
       <div className="mt-8">
         <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">My Decks</h2>
-        {decks.length === 0 ? (
-          <p className="mt-4 text-sm text-white/40">
-            No decks yet. Purchase a deck and enter your activation code above.
-          </p>
-        ) : (
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {decks.map((deck) => (
-              <div
-                key={deck.id}
-                className="overflow-hidden rounded-xl bg-white/5 border border-white/10"
-              >
-                {deck.cover_image_url ? (
-                  <img
-                    src={deck.cover_image_url}
-                    alt={deck.name}
-                    className="aspect-[3/4] w-full object-cover"
-                  />
-                ) : (
-                  <div className="aspect-[3/4] w-full bg-gradient-to-br from-indigo-800 to-purple-900 flex items-center justify-center">
-                    <span className="text-3xl">📚</span>
-                  </div>
-                )}
-                <div className="px-3 py-2">
-                  <div className="text-xs font-medium truncate">{deck.name}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <p className="mt-1.5 text-xs text-white/40">
+          All decks are available on{' '}
+          <span className="text-white/55">bestling.net</span>. Grey = not yours yet · Color = purchased
+          (activate with your code above).
+        </p>
+        <DeckCatalogGrid decks={decks} />
       </div>
     </div>
   )

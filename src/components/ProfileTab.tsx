@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { loadPersistedState } from '../lib/storage'
 import { words as wordDataset } from '../data/words'
 import { getActivatedDecks, type DeckInfo } from '../lib/deckService'
+import DeckCatalogGrid from './DeckCatalogGrid'
 import type { WordMetadata } from '../lib/types'
 
 const NAME_KEY = 'tiktokchinese_display_name'
@@ -246,40 +247,15 @@ export default function ProfileTab() {
           </ul>
         </div>
 
-        {/* Purchased decks */}
+        {/* Same catalog as Library: HSK 1–6 + Pinyin */}
         <div className="mt-8">
           <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">
-            Purchased Decks
+            My decks
           </h2>
-          {decks.length === 0 ? (
-            <p className="mt-4 text-sm text-white/40">
-              No purchased decks. Visit the Library tab to browse and activate flashcard decks.
-            </p>
-          ) : (
-            <div className="mt-3 grid grid-cols-2 gap-3">
-              {decks.map((deck) => (
-                <div
-                  key={deck.id}
-                  className="overflow-hidden rounded-xl bg-white/5 border border-white/10"
-                >
-                  {deck.cover_image_url ? (
-                    <img
-                      src={deck.cover_image_url}
-                      alt={deck.name}
-                      className="aspect-[3/4] w-full object-cover"
-                    />
-                  ) : (
-                    <div className="aspect-[3/4] w-full bg-gradient-to-br from-indigo-800 to-purple-900 flex items-center justify-center">
-                      <span className="text-3xl">📚</span>
-                    </div>
-                  )}
-                  <div className="px-3 py-2">
-                    <div className="text-xs font-medium truncate">{deck.name}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="mt-1 text-xs text-white/40">
+            Grey = not purchased · Color = activated. Shop on bestling.net.
+          </p>
+          <DeckCatalogGrid decks={decks} />
         </div>
       </div>
 
