@@ -15,6 +15,8 @@ export type WordMetadata = {
   use_video_url?: boolean
   base_complexity: number
   dependencies: WordId[]
+  /** Feed item kind for profile / analytics. Defaults to character when omitted. */
+  content_type?: 'character' | 'vocabulary' | 'grammar'
 }
 
 export type WordState = {
