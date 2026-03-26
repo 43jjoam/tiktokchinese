@@ -1006,19 +1006,24 @@ export default function VideoFeed() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         role="application"
-        aria-label="Stealth-learning swipe feed. Swipe left/right, tap for meaning, long-press for breakdown."
+        aria-label="Character feed. Swipe right or up if you know the word; swipe left or down if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
       >
-        {/* Onboarding primer hints */}
+        {/* Onboarding primer: swipe scoring (PRD — loop until user advances) */}
         <AnimatePresence>
           {showPrimerArrow && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 6 }}
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+              className="absolute left-1/2 top-1/2 w-[min(92vw,340px)] -translate-x-1/2 -translate-y-1/2 px-2"
             >
-              <div className="rounded-full bg-white/15 px-5 py-3 text-sm font-semibold backdrop-blur">
-                Swipe right
+              <div className="rounded-2xl bg-black/45 px-4 py-3.5 text-center shadow-lg backdrop-blur-md border border-white/10">
+                <p className="text-sm font-semibold text-white">
+                  Swipe right or up — you know this word
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-white/75">
+                  Swipe left or down — too hard to remember, not interested, or skip for now
+                </p>
               </div>
             </motion.div>
           )}
@@ -1095,7 +1100,7 @@ export default function VideoFeed() {
                   Radical details are demo-only in this MVP.
                 </div>
                 <div className="mt-5 text-xs opacity-70">
-                  Swipe left/right to score. Tap for meaning. Long-press for details.
+                  Right or up = you know it. Left or down = too hard or not interested. Tap for meaning.
                 </div>
               </motion.div>
             </motion.div>

@@ -222,6 +222,34 @@ export default function ProfileTab() {
           {stats.total} total characters & vocabulary
         </p>
 
+        {/* Swipe semantics — matches feed scoring */}
+        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">
+            How swipes work
+          </h2>
+          <ul className="mt-2 space-y-2 text-sm text-white/80">
+            <li>
+              <span className="font-medium text-green-300/90">Know it</span>
+              <span className="text-white/55"> — swipe </span>
+              <span className="text-white/90">right</span>
+              <span className="text-white/55"> or </span>
+              <span className="text-white/90">up</span>
+              <span className="text-white/55">. The app treats that as “I know this word.”</span>
+            </li>
+            <li>
+              <span className="font-medium text-orange-300/90">Not now</span>
+              <span className="text-white/55"> — swipe </span>
+              <span className="text-white/90">left</span>
+              <span className="text-white/55"> or </span>
+              <span className="text-white/90">down</span>
+              <span className="text-white/55">
+                {' '}
+                if it feels too hard, you are not interested, or you want to skip for now.
+              </span>
+            </li>
+          </ul>
+        </div>
+
         {/* Purchased decks */}
         <div className="mt-8">
           <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">
