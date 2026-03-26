@@ -72,8 +72,6 @@ function pickNextWord(args: {
   const { words, wordStates, roll } = args
 
   const MASTERY_THRESHOLD = 3.0
-  const STRUGGLE_LOW = 0.7
-  const STRUGGLE_HIGH = 3.0
 
   const isDepsMastered = (w: WordMetadata) => {
     if (!w.dependencies.length) return true
@@ -91,7 +89,7 @@ function pickNextWord(args: {
 
     if (!st || st.sessionsSeen === 0) bucketA.push(w)
     else if (st.masteryConfirmed || st.mScore >= MASTERY_THRESHOLD) bucketC.push(w)
-    else if (st.mScore >= STRUGGLE_LOW && st.mScore < STRUGGLE_HIGH) bucketB.push(w)
+    else bucketB.push(w)
   }
 
   const pickFrom = (arr: WordMetadata[]) => {
@@ -312,11 +310,11 @@ export default function VideoFeed() {
     lastRenderMsRef.current = 0
     const startSessionMs = sessionStartMsRef.current
 
-    if (sessionVideoIndex === 0) setShowPrimerArrow(false)
-    if (sessionVideoIndex === 1) setShowPrimerTapHint(false)
-    if (sessionVideoIndex === 2) {
-      setShowPrimerArrow(false)
-      setShowPrimerTapHint(false)
+    let primerTimer: number | null = null
+    if (sessionVideoIndex === 0) {
+      primerTimer = window.setTimeout(() => setShowPrimerArrow(true), 3000)
+    } else if (sessionVideoIndex === 1) {
+      primerTimer = window.setTimeout(() => setShowPrimerTapHint(true), 3000)
     }
 
     const tick = () => {
@@ -324,6 +322,10 @@ export default function VideoFeed() {
       const elapsed = now - startSessionMs
       elapsedMsRef.current = elapsed
       const loopsElapsed = loopsElapsedFromMs(elapsed)
+
+      if (!finalizedRef.current && !tapOccurredRef.current && loopsElapsed >= 10) {
+        setShowTapGhostHint(true)
+      }
 
       if (now - lastRenderMsRef.current > 200) {
         setUiTick((x) => x + 1)
@@ -337,6 +339,7 @@ export default function VideoFeed() {
     return () => {
       if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
       rafRef.current = null
+      if (primerTimer) window.clearTimeout(primerTimer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWordId])
@@ -815,7 +818,37 @@ export default function VideoFeed() {
           )}
         </AnimatePresence>
 
-        {/* Primer tap hint removed — tapping anywhere shows meaning, no visible button needed */}
+        {/* Onboarding primer: "Tap for meaning" hint on Video 2 */}
+        <AnimatePresence>
+          {showPrimerTapHint && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              className="absolute left-1/2 top-[60%] -translate-x-1/2"
+            >
+              <div className="rounded-full bg-white/15 px-5 py-3 text-sm font-semibold backdrop-blur">
+                Tap for meaning
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Ghost hint: reappears after 10 loops without interaction (PRD §7.2) */}
+        <AnimatePresence>
+          {showTapGhostHint && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute left-1/2 bottom-[30%] -translate-x-1/2 pointer-events-none"
+            >
+              <div className="rounded-full bg-white/10 px-4 py-2.5 text-xs font-medium backdrop-blur text-white/70">
+                Tap anywhere for meaning
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* L1 meaning overlay is rendered at root level for correct viewport centering */}
 
