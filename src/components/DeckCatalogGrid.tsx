@@ -9,9 +9,10 @@ import {
 
 type Props = {
   decks: DeckInfo[]
+  onSelectOwnedDeck: (deck: DeckInfo) => void
 }
 
-export default function DeckCatalogGrid({ decks }: Props) {
+export default function DeckCatalogGrid({ decks, onSelectOwnedDeck }: Props) {
   return (
     <div className="mt-3 grid grid-cols-2 gap-3">
       {DECK_CATALOG.map((item) => {
@@ -20,8 +21,8 @@ export default function DeckCatalogGrid({ decks }: Props) {
         const bar = catalogBarGradient(item.accent)
 
         const onActivate = () => {
-          if (owned && matched?.shopify_url) {
-            window.open(matched.shopify_url, '_blank', 'noopener')
+          if (owned && matched) {
+            onSelectOwnedDeck(matched)
             return
           }
           window.open(item.shopUrl, '_blank', 'noopener')
@@ -69,7 +70,7 @@ export default function DeckCatalogGrid({ decks }: Props) {
                 {item.title}
               </div>
               <div className={`text-[10px] truncate ${owned ? 'text-white/60' : 'text-white/30'}`}>
-                {owned ? 'Purchased · tap to open' : 'Not purchased · tap for product page'}
+                {owned ? 'Purchased · tap for contents' : 'Not purchased · tap for product page'}
               </div>
             </div>
           </button>

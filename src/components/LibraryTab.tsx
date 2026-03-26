@@ -1,12 +1,20 @@
+import { AnimatePresence } from 'framer-motion'
 import React, { useCallback, useEffect, useState } from 'react'
-import { activateCode, getActivatedDecks, type DeckInfo } from '../lib/deckService'
+import {
+  activateCode,
+  BUILTIN_CHINESE_CHARACTERS_1,
+  getActivatedDecks,
+  type DeckInfo,
+} from '../lib/deckService'
 import DeckCatalogGrid from './DeckCatalogGrid'
+import DeckContentsPanel from './DeckContentsPanel'
 
 export default function LibraryTab() {
   const [code, setCode] = useState('')
   const [activating, setActivating] = useState(false)
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
   const [decks, setDecks] = useState<DeckInfo[]>([])
+  const [openDeck, setOpenDeck] = useState<DeckInfo | null>(null)
 
   useEffect(() => {
     getActivatedDecks().then(setDecks)
@@ -32,6 +40,12 @@ export default function LibraryTab() {
 
   return (
     <div className="relative z-10 h-dvh overflow-y-auto bg-black pb-20 pt-4 px-5">
+      <AnimatePresence>
+        {openDeck && (
+          <DeckContentsPanel key={openDeck.id} deck={openDeck} onBack={() => setOpenDeck(null)} />
+        )}
+      </AnimatePresence>
+
       <h1 className="text-xl font-bold">Library</h1>
 
       {/* Activation section */}
@@ -66,7 +80,26 @@ export default function LibraryTab() {
         <p className="mt-1.5 text-xs text-white/45 leading-relaxed">
           After purchase, your activation code is sent to the email address you provide at checkout.
         </p>
-        <DeckCatalogGrid decks={decks} />
+
+        <button
+          type="button"
+          onClick={() => setOpenDeck(BUILTIN_CHINESE_CHARACTERS_1)}
+          className="mt-4 flex w-full overflow-hidden rounded-xl border border-white/15 bg-white/[0.06] text-left transition-transform active:scale-[0.99]"
+        >
+          <div className="relative h-28 w-24 shrink-0">
+            <img
+              src={BUILTIN_CHINESE_CHARACTERS_1.cover_image_url}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col justify-center px-4 py-3">
+            <span className="text-lg font-bold text-white">{BUILTIN_CHINESE_CHARACTERS_1.name}</span>
+            <span className="mt-1 text-xs text-white/50">Built-in · tap to view all contents</span>
+          </div>
+        </button>
+
+        <DeckCatalogGrid decks={decks} onSelectOwnedDeck={(d) => setOpenDeck(d)} />
       </div>
     </div>
   )

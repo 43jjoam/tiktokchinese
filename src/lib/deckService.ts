@@ -16,6 +16,14 @@ export type DeckInfo = {
   shopify_url: string | null
 }
 
+/** Free built-in deck; always first in Library → My Decks. */
+export const BUILTIN_CHINESE_CHARACTERS_1: DeckInfo = {
+  id: 'builtin-chinese-characters-1',
+  name: 'Chinese Characters 1',
+  cover_image_url: '/decks/chinese-characters-1.png',
+  shopify_url: null,
+}
+
 function getDeviceId(): string {
   let uid = localStorage.getItem('tiktokchinese_uid')
   if (!uid) {

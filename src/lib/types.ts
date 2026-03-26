@@ -17,6 +17,8 @@ export type WordMetadata = {
   dependencies: WordId[]
   /** Feed item kind for profile / analytics. Defaults to character when omitted. */
   content_type?: 'character' | 'vocabulary' | 'grammar'
+  /** Library catalog keys (e.g. hsk-2) that include this word; used when a purchased deck lists contents. */
+  deck_catalog_keys?: string[]
 }
 
 export type WordState = {
