@@ -936,16 +936,7 @@ export default function VideoFeed() {
               <div className="mt-3 h-px w-full bg-white/15" />
 
               {isNativelySupported ? (
-                <>
-                  <div className="mt-3 text-base font-semibold">{staticMeaning}</div>
-                  {Object.entries(allMeanings)
-                    .filter(([key, val]) => key !== locale && key !== 'zh-TW' && val)
-                    .map(([key, val]) => (
-                      <div key={key} className="mt-2 text-sm text-white/80">
-                        <span className="text-white/50">{key.toUpperCase()} </span>{val}
-                      </div>
-                    ))}
-                </>
+                <div className="mt-3 text-base font-semibold">{staticMeaning}</div>
               ) : (
                 <>
                   {translatedMeaning && (
@@ -958,11 +949,6 @@ export default function VideoFeed() {
                     <span className="text-white/50 text-xs mr-1.5">EN</span>
                     {englishMeaning}
                   </div>
-                  {allMeanings.th && (
-                    <div className="mt-2 text-sm text-white/80">
-                      <span className="text-white/50">TH </span>{allMeanings.th}
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -979,12 +965,14 @@ export default function VideoFeed() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="absolute left-1/2 top-10 z-20 w-[min(92vw,600px)] -translate-x-1/2 text-center pointer-events-none"
+            className="absolute left-1/2 top-10 z-20 -translate-x-1/2 text-center pointer-events-none"
           >
-            <div className="text-4xl font-semibold tracking-tight text-white drop-shadow">
-              {currentWord.character}
+            <div className="inline-block rounded-2xl bg-black/40 px-6 py-3 backdrop-blur-md">
+              <div className="text-4xl font-semibold tracking-tight text-white">
+                {currentWord.character}
+              </div>
+              <div className="mt-1 text-lg text-white/85">{currentWord.pinyin}</div>
             </div>
-            <div className="mt-1 text-lg text-white/85">{currentWord.pinyin}</div>
           </motion.div>
         )}
       </AnimatePresence>
