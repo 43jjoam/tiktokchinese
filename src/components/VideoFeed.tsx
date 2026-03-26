@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSignals, SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
 import { classifyTapTiming, computeTapRateAdaptiveAlpha, loopsElapsedFromMs, updateWordState } from '../lib/memoryEngine'
 import { loadPersistedState, savePersistedState, type AppMeta } from '../lib/storage'
-import { isVideoLiked, toggleVideoLike } from '../lib/likeService'
+import { getLikeStatus, toggleLike } from '../lib/likeService'
 import { words as wordDataset } from '../data/words'
 
 const LOOP_MS = 5000
@@ -283,6 +283,7 @@ export default function VideoFeed() {
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
   const [videoReady, setVideoReady] = useState(false)
   const [liked, setLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
   const likedRef = useRef(false)
   likedRef.current = liked
 
@@ -342,7 +343,13 @@ export default function VideoFeed() {
 
   useEffect(() => {
     const videoKey = currentWord.youtube_url || currentWord.video_url
-    setLiked(isVideoLiked(videoKey))
+    let cancelled = false
+    getLikeStatus(videoKey).then((s) => {
+      if (cancelled) return
+      setLiked(s.liked)
+      setLikeCount(s.count)
+    })
+    return () => { cancelled = true }
   }, [currentWord.word_id, currentWord.youtube_url, currentWord.video_url])
 
   const chooseNextWordFromBuckets = (excludeWordId?: string) => {
@@ -497,16 +504,19 @@ export default function VideoFeed() {
   doLikeRef.current = () => {
     if (likedRef.current) return
     const videoKey = currentWord.youtube_url || currentWord.video_url
-    toggleVideoLike(videoKey)
     setLiked(true)
+    setLikeCount((c) => c + 1)
+    toggleLike(videoKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
   }
 
   const handleHeartToggle = useCallback(() => {
     const videoKey = currentWord.youtube_url || currentWord.video_url
-    const nowLiked = toggleVideoLike(videoKey)
-    setLiked(nowLiked)
-    if (nowLiked) triggerLikeBurst()
-  }, [currentWord.youtube_url, currentWord.video_url])
+    const wasLiked = likedRef.current
+    setLiked(!wasLiked)
+    setLikeCount((c) => wasLiked ? Math.max(0, c - 1) : c + 1)
+    if (!wasLiked) triggerLikeBurst()
+    toggleLike(videoKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
+  }, [currentWord.youtube_url, currentWord.video_url, triggerLikeBurst])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)
@@ -949,7 +959,7 @@ export default function VideoFeed() {
             </svg>
           </motion.div>
           <span className="text-xs font-semibold text-white/90 drop-shadow">
-            {liked ? 1 : 0}
+            {likeCount}
           </span>
         </button>
       </div>
