@@ -10,7 +10,8 @@
     "setup:env": "node scripts/setup-env-interactive.mjs",
     "check:supabase-env": "node scripts/check-supabase-env.mjs",
     "videos:storage-keys": "node scripts/list-video-storage-keys.mjs",
-    "test:storage-url": "node scripts/test-storage-signed-url.mjs"
+    "test:storage-url": "node scripts/test-storage-signed-url.mjs",
+    "mascot:install": "node scripts/install-mascot-video.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

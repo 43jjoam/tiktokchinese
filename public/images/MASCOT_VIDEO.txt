@@ -1,0 +1,16 @@
+LEFT SWIPE VIDEO (taco)
+The app picks one of these at random each time you swipe left:
+
+  taco encouraging A.mp4
+  taco encouraging B.mp4
+  taco encouraging C.mp4
+  taco encouraging D.mp4
+
+Keep them in this folder (public/images). Poster + fallback: swipe-left-mascot.png
+
+Optional: override with .env
+  VITE_SWIPE_LEFT_MASCOT_VIDEO_URL=https://...
+  VITE_SWIPE_LEFT_MASCOT_WEBM_URL=https://...
+
+To add another clip, use the same naming pattern: taco encouraging E.mp4
+Then add the filename to TACO_ENCOURAGEMENT_VIDEOS in src/components/VideoFeed.tsx

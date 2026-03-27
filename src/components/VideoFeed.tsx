@@ -17,8 +17,441 @@ import {
   prefetchLessonVideoSignedUrls,
 } from '../lib/storageVideoUrl'
 import { words as wordDataset } from '../data/words'
+import { getSwipeEncouragementBundle, resolveSwipeEncouragementLang } from '../lib/swipeEncouragement'
 
 const LOOP_MS = 5000
+
+/** At least ~1.5s; if the next clip is slower, the layer stays until it can play. */
+const SWIPE_ENCOURAGEMENT_MIN_MS = 1500
+
+function randomEncouragementIndex(length: number, lastIdx: number | null): number {
+  if (length <= 1) return 0
+  if (lastIdx == null) return Math.floor(Math.random() * length)
+  let i = Math.floor(Math.random() * length)
+  let guard = 0
+  while (i === lastIdx && guard++ < 12) {
+    i = Math.floor(Math.random() * length)
+  }
+  if (i === lastIdx) i = (lastIdx + 1) % length
+  return i
+}
+
+const swipeEncFont = "'Outfit', system-ui, sans-serif"
+
+const swipeEncBackdropVariants = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] },
+  },
+  exit: { opacity: 0, transition: { duration: 0.2 } },
+} as const
+
+const swipeEncCardVariants = {
+  hidden: { opacity: 0, scale: 0.92, y: 12 },
+  show: {
+    opacity: 1,
+    scale: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 420, damping: 32, mass: 0.85 },
+  },
+  exit: { opacity: 0, scale: 0.98, y: -6, transition: { duration: 0.18 } },
+} as const
+
+const swipeEncWordsContainer = {
+  hidden: {},
+  show: {
+    transition: { staggerChildren: 0.045, delayChildren: 0.06 },
+  },
+} as const
+
+const swipeEncWordItem = {
+  hidden: { opacity: 0, y: 18, rotateX: -35, filter: 'blur(8px)' },
+  show: {
+    opacity: 1,
+    y: 0,
+    rotateX: 0,
+    filter: 'blur(0px)',
+    transition: { type: 'spring', stiffness: 380, damping: 26 },
+  },
+} as const
+
+const assetBase = import.meta.env.BASE_URL
+const SWIPE_LEFT_MASCOT_PNG = `${assetBase}images/swipe-left-mascot.png`
+const SWIPE_LEFT_MASCOT_WEBM = `${assetBase}images/swipe-left-mascot.webm`
+const SWIPE_LEFT_MASCOT_MP4 = `${assetBase}images/swipe-left-mascot.mp4`
+
+/** Optional: full HTTPS URL if the file is too large for git or you host on Supabase/CDN. */
+const REMOTE_SWIPE_LEFT_MASCOT_WEBM = (
+  import.meta.env.VITE_SWIPE_LEFT_MASCOT_WEBM_URL as string | undefined
+)?.trim()
+const REMOTE_SWIPE_LEFT_MASCOT_MP4 = (
+  import.meta.env.VITE_SWIPE_LEFT_MASCOT_VIDEO_URL as string | undefined
+)?.trim()
+
+/** Left-swipe encouragement clips in public/images/ (spaces OK — URL-encoded when loaded). */
+const TACO_ENCOURAGEMENT_VIDEOS = [
+  'taco encouraging A.mp4',
+  'taco encouraging B.mp4',
+  'taco encouraging C.mp4',
+  'taco encouraging D.mp4',
+] as const
+
+function publicImagesVideoUrl(fileName: string) {
+  return `${assetBase}images/${encodeURIComponent(fileName)}`
+}
+
+const CONFETTI_COLORS = [
+  '#fcd34d',
+  '#f472b6',
+  '#38bdf8',
+  '#c084fc',
+  '#fb7185',
+  '#4ade80',
+  '#fb923c',
+  '#fef08a',
+  '#ffffff',
+  '#facc15',
+  '#e879f9',
+] as const
+
+function PaperFlashBursts() {
+  const flashes = useMemo(
+    () => [
+      { x: '14%', y: '24%', c: 'rgba(253, 224, 71, 0.55)', delay: 0 },
+      { x: '86%', y: '20%', c: 'rgba(244, 114, 182, 0.5)', delay: 0.06 },
+      { x: '50%', y: '12%', c: 'rgba(255, 255, 255, 0.45)', delay: 0.1 },
+      { x: '22%', y: '72%', c: 'rgba(56, 189, 248, 0.45)', delay: 0.14 },
+      { x: '78%', y: '68%', c: 'rgba(192, 132, 252, 0.5)', delay: 0.18 },
+      { x: '48%', y: '88%', c: 'rgba(251, 191, 36, 0.4)', delay: 0.22 },
+    ],
+    [],
+  )
+
+  return (
+    <>
+      {flashes.map((f, i) => (
+        <motion.div
+          key={i}
+          aria-hidden
+          className="absolute inset-0 mix-blend-screen"
+          style={{
+            background: `radial-gradient(ellipse 65% 50% at ${f.x} ${f.y}, ${f.c}, transparent 70%)`,
+          }}
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{
+            opacity: [0, 1, 0.25, 0.75, 0.15, 0],
+            scale: [0.85, 1.12, 1, 1.06, 1.02, 1],
+          }}
+          transition={{
+            duration: 1.35,
+            delay: f.delay,
+            times: [0, 0.12, 0.28, 0.45, 0.65, 1],
+            ease: 'easeOut',
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
+function RightSwipeConfettiBurst() {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 72 }, (_, i) => {
+        const golden = ((i + 1) * 0.6180339887) % 1
+        const angle = golden * Math.PI * 2 + (i % 5) * 0.31
+        const dist = 95 + (i % 13) * 19 + (i % 7) * 11
+        const delay = (i % 12) * 0.012
+        const w = 4 + (i % 6)
+        const h = 5 + (i % 8)
+        const rot = (i * 47) % 360
+        return { i, angle, dist, delay, w, h, rot, color: CONFETTI_COLORS[i % CONFETTI_COLORS.length] }
+      }),
+    [],
+  )
+
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 top-[40%] h-0 w-0 overflow-visible"
+      aria-hidden
+    >
+      {pieces.map((p) => (
+        <motion.div
+          key={p.i}
+          className="absolute rounded-[1px] shadow-sm"
+          style={{
+            width: p.w,
+            height: p.h,
+            left: -p.w / 2,
+            top: -p.h / 2,
+            backgroundColor: p.color,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+          }}
+          initial={{ x: 0, y: 0, opacity: 1, rotate: p.rot, scale: 1 }}
+          animate={{
+            x: Math.cos(p.angle) * p.dist,
+            y: Math.sin(p.angle) * p.dist * 0.52 + Math.abs(Math.sin(p.angle * 2)) * 55 + 35,
+            opacity: [1, 1, 0],
+            rotate: p.rot + (p.i % 2 === 0 ? 280 : -260),
+            scale: [1, 1.15, 0.35],
+          }}
+          transition={{
+            duration: 1.05 + (p.i % 5) * 0.08,
+            delay: p.delay,
+            ease: [0.22, 0.61, 0.36, 1],
+          }}
+        />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * Taco encouragement: sharp clip centered on top. Blurred frosted feed + glass accents match right-swipe
+ * (see SwipeEncouragementFrostedBackdrop / SwipeEncouragementGlassAccents). Random local taco or remote URLs.
+ */
+function SwipeLeftTacoEncouragementBlock({
+  variantKey,
+  text,
+  wordGradient,
+}: {
+  variantKey: string
+  text: string
+  wordGradient: string
+}) {
+  const [useImageFallback, setUseImageFallback] = useState(false)
+  const fgRef = useRef<HTMLVideoElement>(null)
+
+  const useRemote = Boolean(REMOTE_SWIPE_LEFT_MASCOT_MP4 || REMOTE_SWIPE_LEFT_MASCOT_WEBM)
+
+  const localTacoSrc = useMemo(() => {
+    const idx = Math.floor(Math.random() * TACO_ENCOURAGEMENT_VIDEOS.length)
+    return publicImagesVideoUrl(TACO_ENCOURAGEMENT_VIDEOS[idx])
+  }, [variantKey])
+
+  useEffect(() => {
+    if (useImageFallback) return
+    const playFg = () => {
+      const v = fgRef.current
+      if (!v) return
+      try {
+        void v.play()
+      } catch {
+        /* autoplay */
+      }
+    }
+    playFg()
+    const id = window.setTimeout(playFg, 120)
+    return () => window.clearTimeout(id)
+  }, [useImageFallback, useRemote, localTacoSrc])
+
+  if (useImageFallback) {
+    return (
+      <div className="relative z-10 flex min-h-full w-full flex-col items-center justify-center gap-3 overflow-hidden sm:gap-4">
+        <div className="relative z-10 flex max-w-[min(22rem,94vw)] flex-col items-center gap-3 sm:gap-4">
+          <motion.img
+            src={SWIPE_LEFT_MASCOT_PNG}
+            alt=""
+            aria-hidden
+            className="h-auto max-h-[min(34vh,220px)] w-auto max-w-[min(78vw,260px)] object-contain [filter:drop-shadow(0_12px_28px_rgba(0,0,0,0.5))]"
+            initial={{ scale: 0.55, opacity: 0, y: 16 }}
+            animate={{
+              scale: 1,
+              opacity: 1,
+              y: [0, -6, 0],
+            }}
+            transition={{
+              scale: { type: 'spring', stiffness: 380, damping: 22, mass: 0.9 },
+              opacity: { duration: 0.35 },
+              y: { duration: 2.4, repeat: Infinity, ease: 'easeInOut' },
+            }}
+          />
+          <EncouragementWordCard text={text} wordGradient={wordGradient} compact />
+        </div>
+      </div>
+    )
+  }
+
+  const videoKey = useRemote ? 'remote-mascot' : localTacoSrc
+
+  return (
+    <div className="relative z-10 flex min-h-full w-full flex-col items-center justify-center overflow-hidden">
+      <div className="relative z-10 flex max-w-[min(22rem,94vw)] flex-col items-center gap-3 px-4 sm:gap-4 sm:px-6">
+        <motion.div
+          initial={{ scale: 0.55, opacity: 0, y: 16 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 380, damping: 22, mass: 0.9 }}
+        >
+          <video
+            ref={fgRef}
+            key={`fg-${videoKey}`}
+            src={useRemote ? undefined : localTacoSrc}
+            className="mx-auto block h-auto max-h-[min(34vh,220px)] w-auto max-w-[min(78vw,260px)] object-contain [filter:drop-shadow(0_12px_28px_rgba(0,0,0,0.55))]"
+            poster={SWIPE_LEFT_MASCOT_PNG}
+            muted
+            playsInline
+            loop
+            autoPlay
+            preload="auto"
+            aria-hidden
+            onError={() => setUseImageFallback(true)}
+          >
+            {useRemote ? (
+              <>
+                {REMOTE_SWIPE_LEFT_MASCOT_WEBM ? (
+                  <source src={REMOTE_SWIPE_LEFT_MASCOT_WEBM} type="video/webm" />
+                ) : null}
+                {REMOTE_SWIPE_LEFT_MASCOT_MP4 ? (
+                  <source src={REMOTE_SWIPE_LEFT_MASCOT_MP4} type="video/mp4" />
+                ) : null}
+              </>
+            ) : null}
+          </video>
+        </motion.div>
+        <EncouragementWordCard text={text} wordGradient={wordGradient} compact />
+      </div>
+    </div>
+  )
+}
+
+function EncouragementWordCard({
+  text,
+  wordGradient,
+  compact,
+}: {
+  text: string
+  wordGradient: string
+  compact?: boolean
+}) {
+  const words = text.split(/\s+/).filter(Boolean)
+  return (
+    <motion.div
+      aria-hidden
+      variants={swipeEncCardVariants}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      className={`relative rounded-2xl border border-white/45 bg-white/35 shadow-[0_12px_40px_rgba(15,23,42,0.08)] backdrop-blur-xl backdrop-saturate-150 ${
+        compact
+          ? 'max-w-[min(20rem,90vw)] px-4 py-4 sm:px-5 sm:py-5'
+          : 'max-w-[min(22rem,92vw)] px-5 py-6 sm:px-7 sm:py-7'
+      }`}
+      style={{
+        fontFamily: swipeEncFont,
+        perspective: 640,
+      }}
+    >
+      <motion.div
+        variants={swipeEncWordsContainer}
+        initial="hidden"
+        animate="show"
+        className={`flex flex-wrap justify-center gap-x-[0.35em] gap-y-1 text-center font-semibold leading-snug ${
+          compact ? 'text-[0.98rem] sm:text-lg' : 'text-[1.05rem] sm:text-xl sm:leading-snug'
+        }`}
+      >
+        {words.map((w, i) => (
+          <motion.span key={`${text}-${i}-${w}`} variants={swipeEncWordItem} className={wordGradient}>
+            {w}
+          </motion.span>
+        ))}
+      </motion.div>
+      <motion.div
+        aria-hidden
+        className="mx-auto mt-3 h-0.5 max-w-[4.5rem] rounded-full bg-gradient-to-r from-transparent via-white/55 to-transparent sm:mt-4"
+        initial={{ scaleX: 0, opacity: 0 }}
+        animate={{ scaleX: 1, opacity: 1 }}
+        transition={{ delay: 0.35, duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+      />
+    </motion.div>
+  )
+}
+
+/** Full-screen frosted whitish glass over the feed (both swipe directions). */
+function SwipeEncouragementFrostedBackdrop() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-0 bg-white/[0.2] ring-1 ring-inset ring-white/35 backdrop-blur-2xl backdrop-saturate-150"
+      aria-hidden
+    />
+  )
+}
+
+/** Same soft gradient + pulsing blur orb as right-swipe encouragement (shared left/right). */
+function SwipeEncouragementGlassAccents() {
+  return (
+    <>
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.12] via-transparent to-amber-50/25"
+      />
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-1/2 h-[min(28rem,85vw)] w-[min(28rem,85vw)] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-40 blur-3xl"
+        animate={{
+          scale: [1, 1.08, 1],
+          opacity: [0.28, 0.42, 0.28],
+        }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+        style={{
+          background:
+            'radial-gradient(circle, rgba(255,255,255,0.55) 0%, rgba(253,230,138,0.22) 38%, rgba(251,207,232,0.18) 55%, transparent 68%)',
+        }}
+      />
+    </>
+  )
+}
+
+function SwipeTransitionEncouragement({
+  dir,
+  text,
+}: {
+  dir: SwipeDirection
+  text: string
+}) {
+  const wordGradientLeft = 'inline-block text-white'
+  const wordGradientRight = 'inline-block text-white'
+
+  if (dir === 'right') {
+    return (
+      <motion.div
+        role="status"
+        variants={swipeEncBackdropVariants}
+        initial="hidden"
+        animate="show"
+        exit="exit"
+        className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center overflow-hidden px-5 sm:px-8"
+        aria-label={text}
+      >
+        <p className="sr-only">{text}</p>
+        <SwipeEncouragementFrostedBackdrop />
+        <SwipeEncouragementGlassAccents />
+        <PaperFlashBursts />
+        <RightSwipeConfettiBurst />
+        <div className="relative z-10 flex flex-col items-center">
+          <EncouragementWordCard text={text} wordGradient={wordGradientRight} />
+        </div>
+      </motion.div>
+    )
+  }
+
+  return (
+    <motion.div
+      role="status"
+      variants={swipeEncBackdropVariants}
+      initial="hidden"
+      animate="show"
+      exit="exit"
+      className="pointer-events-none absolute inset-0 z-[4] flex items-center justify-center overflow-hidden px-5 sm:px-8"
+      aria-label={text}
+    >
+      <p className="sr-only">{text}</p>
+      <SwipeEncouragementFrostedBackdrop />
+      <SwipeEncouragementGlassAccents />
+      <SwipeLeftTacoEncouragementBlock variantKey={text} text={text} wordGradient={wordGradientLeft} />
+    </motion.div>
+  )
+}
 
 /* ── Audio: Chinese TTS ── */
 function speakChinese(text: string) {
@@ -481,6 +914,11 @@ export default function VideoFeed() {
 
   const locale = useMemo(() => detectSupportedLocale(), [])
   const rawLang = useMemo(() => getRawLangCode(), [])
+  const encouragementUiLang = useMemo(() => resolveSwipeEncouragementLang(), [])
+  const swipeEncouragementBundle = useMemo(
+    () => getSwipeEncouragementBundle(encouragementUiLang),
+    [encouragementUiLang],
+  )
   const isNativelySupported = useMemo(
     () => rawLang === 'en' || rawLang === 'th' || rawLang === 'zh',
     [rawLang],
@@ -652,13 +1090,53 @@ export default function VideoFeed() {
   const tapPrimerConsumedRef = useRef(false)
   const [videoReady, setVideoReady] = useState(false)
 
+  const lastLeftEncIdxRef = useRef<number | null>(null)
+  const lastRightEncIdxRef = useRef<number | null>(null)
+  const [swipeTransitionLine, setSwipeTransitionLine] = useState<{
+    dir: SwipeDirection
+    text: string
+  } | null>(null)
+
+  const swipeTransitionLineRef = useRef(swipeTransitionLine)
+  swipeTransitionLineRef.current = swipeTransitionLine
+
+  const encouragementStartedAtRef = useRef<number | null>(null)
+  const feedBufferedRef = useRef(false)
+
+  const tryCompleteSwipeEncouragement = useCallback(() => {
+    if (!swipeTransitionLineRef.current) return
+    if (!feedBufferedRef.current) return
+    const t0 = encouragementStartedAtRef.current
+    if (t0 == null) return
+    if (Date.now() - t0 < SWIPE_ENCOURAGEMENT_MIN_MS) return
+    setSwipeTransitionLine(null)
+    setVideoReady(true)
+    encouragementStartedAtRef.current = null
+    feedBufferedRef.current = false
+  }, [])
+
+  const markFeedPlayable = useCallback(() => {
+    if (!swipeTransitionLineRef.current) {
+      setVideoReady(true)
+      return
+    }
+    feedBufferedRef.current = true
+    tryCompleteSwipeEncouragement()
+  }, [tryCompleteSwipeEncouragement])
+
+  useEffect(() => {
+    if (!swipeTransitionLine) return
+    const id = window.setInterval(() => tryCompleteSwipeEncouragement(), 64)
+    return () => window.clearInterval(id)
+  }, [swipeTransitionLine, tryCompleteSwipeEncouragement])
+
   useEffect(() => {
     if (!ytId && !needsSignedNativeUrl) return
     const t = window.setTimeout(() => {
-      setVideoReady((r) => r || true)
+      markFeedPlayable()
     }, 12000)
     return () => window.clearTimeout(t)
-  }, [currentWord.word_id, ytId, needsSignedNativeUrl])
+  }, [currentWord.word_id, ytId, needsSignedNativeUrl, markFeedPlayable])
 
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
@@ -795,6 +1273,21 @@ export default function VideoFeed() {
   finalizeSessionRef.current = (swipeDirection: SwipeDirection) => {
     if (finalizedRef.current) return
     finalizedRef.current = true
+
+    encouragementStartedAtRef.current = Date.now()
+    feedBufferedRef.current = false
+    if (swipeDirection === 'left') {
+      const lines = swipeEncouragementBundle.left
+      const i = randomEncouragementIndex(lines.length, lastLeftEncIdxRef.current)
+      lastLeftEncIdxRef.current = i
+      setSwipeTransitionLine({ dir: 'left', text: lines[i] })
+    } else {
+      const lines = swipeEncouragementBundle.right
+      const i = randomEncouragementIndex(lines.length, lastRightEncIdxRef.current)
+      lastRightEncIdxRef.current = i
+      setSwipeTransitionLine({ dir: 'right', text: lines[i] })
+    }
+    setVideoReady(false)
 
     if (tapSingleTimeoutRef.current) {
       window.clearTimeout(tapSingleTimeoutRef.current)
@@ -1090,12 +1583,12 @@ export default function VideoFeed() {
         style={{ backgroundImage: avatarGradient(currentWord.word_id) }}
       />
 
-      {/* Video background layer — no pointer events so gestures pass through */}
+      {/* Video background layer — visible (blurred) under encouragement overlay like before. */}
       <div className="absolute inset-0 z-[1]" style={{ pointerEvents: 'none' }}>
         {ytId ? (
           <YouTubePlayer
             videoId={ytId}
-            onPlaying={() => setVideoReady(true)}
+            onPlaying={() => markFeedPlayable()}
           />
         ) : needsSignedNativeUrl ? (
           nativePlaybackSrc ? (
@@ -1109,8 +1602,8 @@ export default function VideoFeed() {
               preload="auto"
               className="h-full w-full object-cover"
               style={{ pointerEvents: 'none' }}
-              onLoadedData={() => setVideoReady(true)}
-              onCanPlay={() => setVideoReady(true)}
+              onLoadedData={() => markFeedPlayable()}
+              onCanPlay={() => markFeedPlayable()}
               onError={() => {
                 const w = currentWordRef.current
                 const fb = w.video_url
@@ -1148,8 +1641,8 @@ export default function VideoFeed() {
             preload="auto"
             className="h-full w-full object-cover"
             style={{ pointerEvents: 'none' }}
-            onLoadedData={() => setVideoReady(true)}
-            onCanPlay={() => setVideoReady(true)}
+            onLoadedData={() => markFeedPlayable()}
+            onCanPlay={() => markFeedPlayable()}
             onEnded={(ev) => {
               const v = ev.currentTarget
               try {
@@ -1160,6 +1653,17 @@ export default function VideoFeed() {
           />
         )}
       </div>
+
+      {/* Between-swipe encouragement while the next clip buffers (signed URL + decode). */}
+      <AnimatePresence>
+        {swipeTransitionLine && !videoReady && (
+          <SwipeTransitionEncouragement
+            key={swipeTransitionLine.text}
+            dir={swipeTransitionLine.dir}
+            text={swipeTransitionLine.text}
+          />
+        )}
+      </AnimatePresence>
 
       {/* No extra YouTube embed preloads: several concurrent embeds break playback on many phones after 1–2 videos. */}
 
