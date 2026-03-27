@@ -8,10 +8,10 @@ export type WordMetadata = {
   pinyin: string
   l1_meanings: Partial<Record<Locale, string>>
   video_url: string
-  // Original video source (reference / tooling). Playback uses the iframe player when present,
-  // unless use_video_url is true — then video_url is used (e.g. other decks with bundled MP4s).
+  // Original video source. Without use_video_url, playback uses the iframe player when present.
+  // With use_video_url, try Supabase signed URL + video_url first; youtube_url is last-resort if both fail.
   youtube_url?: string
-  /** When true, always play video_url in a native <video>; youtube_url is ignored for playback. */
+  /** When true, prefer Storage signed URL then native video_url; YouTube only if those fail to play. */
   use_video_url?: boolean
   /**
    * Path inside a private Supabase Storage bucket (no leading slash), e.g. `hsk1/M-dad-01.mp4`.

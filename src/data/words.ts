@@ -13,6 +13,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-dad-01.mp4",
     "use_video_url": true,
     "video_storage_path": "M-dad-01.mp4",
+    "youtube_url": "https://youtube.com/shorts/G1gj2iFq1cQ?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -28,6 +29,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-sendout-04.mp4",
     "use_video_url": true,
     "video_storage_path": "M-sendout-04.mp4",
+    "youtube_url": "https://youtube.com/shorts/8AQx3XlKFo0?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -43,6 +45,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-fear-03.mp4",
     "use_video_url": true,
     "video_storage_path": "M-fear-03.mp4",
+    "youtube_url": "https://youtube.com/shorts/AJiWAjCumf4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -58,6 +61,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-hair-05.mp4",
     "use_video_url": true,
     "video_storage_path": "M-hair-05.mp4",
+    "youtube_url": "https://youtube.com/shorts/_2LBJ29tuSo?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -73,6 +77,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-hitdrum-06.mp4",
     "use_video_url": true,
     "video_storage_path": "M-hitdrum-06.mp4",
+    "youtube_url": "https://youtube.com/shorts/8EvUYc2PdRY?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -88,6 +93,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-big-07.mp4",
     "use_video_url": true,
     "video_storage_path": "M-big-07.mp4",
+    "youtube_url": "https://youtube.com/shorts/saSvRZCXvPs?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -103,6 +109,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-horse-08.mp4",
     "use_video_url": true,
     "video_storage_path": "M-horse-08.mp4",
+    "youtube_url": "https://youtube.com/shorts/EEM6IQdfhmc?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -118,6 +125,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-climb-09.mp4",
     "use_video_url": true,
     "video_storage_path": "M-climb-09.mp4",
+    "youtube_url": "https://youtube.com/shorts/y1ZKMujVMSI?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -133,6 +141,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-scold-10.mp4",
     "use_video_url": true,
     "video_storage_path": "M-scold-10.mp4",
+    "youtube_url": "https://youtube.com/shorts/Tukm0KpZPl0?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -148,6 +157,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-brodcast-11.mp4",
     "use_video_url": true,
     "video_storage_path": "M-brodcast-11.mp4",
+    "youtube_url": "https://youtube.com/shorts/5r6xVnLz1l0?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -163,6 +173,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-uncle-12.mp4",
     "use_video_url": true,
     "video_storage_path": "M-uncle-12.mp4",
+    "youtube_url": "https://youtube.com/shorts/nNCiD2Hz3A4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -178,6 +189,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-splash-13.mp4",
     "use_video_url": true,
     "video_storage_path": "M-splash-13.mp4",
+    "youtube_url": "https://youtube.com/shorts/a-6t-UGrcRg?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -193,6 +205,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-oldwoman-14.mp4",
     "use_video_url": true,
     "video_storage_path": "M-oldwoman-14.mp4",
+    "youtube_url": "https://youtube.com/shorts/nnaUXmmqKLQ?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -208,6 +221,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-tobreak-15.mp4",
     "use_video_url": true,
     "video_storage_path": "M-tobreak-15.mp4",
+    "youtube_url": "https://youtube.com/shorts/NfV4YED8t-4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -223,6 +237,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-totouch-16.mp4",
     "use_video_url": true,
     "video_storage_path": "M-totouch-16.mp4",
+    "youtube_url": "https://youtube.com/shorts/-TavlbVNPzw?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -238,6 +253,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-rub-17.mp4",
     "use_video_url": true,
     "video_storage_path": "M-rub-17.mp4",
+    "youtube_url": "https://youtube.com/shorts/HOns4fjWc4o?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -253,6 +269,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-apply-18.mp4",
     "use_video_url": true,
     "video_storage_path": "M-apply-18.mp4",
+    "youtube_url": "https://youtube.com/shorts/vW93gSku9P8?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -268,6 +285,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-wipe-19.mp4",
     "use_video_url": true,
     "video_storage_path": "M-wipe-19.mp4",
+    "youtube_url": "https://youtube.com/shorts/APp2ySmeteI?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -283,6 +301,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-silent-20.mp4",
     "use_video_url": true,
     "video_storage_path": "M-silent-20.mp4",
+    "youtube_url": "https://youtube.com/shorts/jmM5whTa3e8?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -298,6 +317,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-foam-21.mp4",
     "use_video_url": true,
     "video_storage_path": "M-foam-21.mp4",
+    "youtube_url": "https://youtube.com/shorts/n54ZIqYmfHA?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -313,6 +333,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-of-22.mp4",
     "use_video_url": true,
     "video_storage_path": "M-of-22.mp4",
+    "youtube_url": "https://youtube.com/shorts/Tn_hkVuw8CE?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -328,6 +349,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-morals-24.mp4",
     "use_video_url": true,
     "video_storage_path": "M-morals-24.mp4",
+    "youtube_url": "https://youtube.com/shorts/I1DFx2DOA-Q?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -343,6 +365,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-budda-25.mp4",
     "use_video_url": true,
     "video_storage_path": "M-budda-25.mp4",
+    "youtube_url": "https://youtube.com/shorts/Obr8qW04i9o?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -358,6 +381,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-compel-26.mp4",
     "use_video_url": true,
     "video_storage_path": "M-compel-26.mp4",
+    "youtube_url": "https://youtube.com/shorts/DpoG52_EeGw?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -373,6 +397,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-nose-27.mp4",
     "use_video_url": true,
     "video_storage_path": "M-nose-27.mp4",
+    "youtube_url": "https://youtube.com/shorts/rSq7PUv6Qtw?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -388,6 +413,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-pen-28.mp4",
     "use_video_url": true,
     "video_storage_path": "M-pen-28.mp4",
+    "youtube_url": "https://youtube.com/shorts/W2ag11tR3rs?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -403,6 +429,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-close-29.mp4",
     "use_video_url": true,
     "video_storage_path": "M-close-29.mp4",
+    "youtube_url": "https://youtube.com/shorts/T7IIBALDi94?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -418,6 +445,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-criticize-30.mp4",
     "use_video_url": true,
     "video_storage_path": "M-criticize-30.mp4",
+    "youtube_url": "https://youtube.com/shorts/WbjsouQRNw8?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -433,6 +461,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-skin-31.mp4",
     "use_video_url": true,
     "video_storage_path": "M-skin-31.mp4",
+    "youtube_url": "https://youtube.com/shorts/ieg8OaKa448?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -448,6 +477,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-rogue-32.mp4",
     "use_video_url": true,
     "video_storage_path": "M-rogue-32.mp4",
+    "youtube_url": "https://youtube.com/shorts/oxg-ZD0TW5g?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -463,6 +493,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-tired-33.mp4",
     "use_video_url": true,
     "video_storage_path": "M-tired-33.mp4",
+    "youtube_url": "https://youtube.com/shorts/HyRM4Kb5cHk?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -478,6 +509,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-fart-34.mp4",
     "use_video_url": true,
     "video_storage_path": "M-fart-34.mp4",
+    "youtube_url": "https://youtube.com/shorts/mdePEHi_9lM?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -493,6 +525,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-meow-35.mp4",
     "use_video_url": true,
     "video_storage_path": "M-meow-35.mp4",
+    "youtube_url": "https://youtube.com/shorts/jvMjnMuMg-k?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -508,6 +541,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-lost-36.mp4",
     "use_video_url": true,
     "video_storage_path": "M-lost-36.mp4",
+    "youtube_url": "https://youtube.com/shorts/UdWPWDwOpRQ?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -523,6 +557,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-rice-37.mp4",
     "use_video_url": true,
     "video_storage_path": "M-rice-37.mp4",
+    "youtube_url": "https://youtube.com/shorts/_ZK1VOPugd0?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -538,6 +573,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-dense-38.mp4",
     "use_video_url": true,
     "video_storage_path": "M-dense-38.mp4",
+    "youtube_url": "https://youtube.com/shorts/RzGJnfMFja8?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -553,6 +589,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-secret-39.mp4",
     "use_video_url": true,
     "video_storage_path": "M-secret-39.mp4",
+    "youtube_url": "https://youtube.com/shorts/R_SBLuoQKU8?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -568,6 +605,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-drop-40.mp4",
     "use_video_url": true,
     "video_storage_path": "M-drop-40.mp4",
+    "youtube_url": "https://youtube.com/shorts/D5O80tREl7A?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -583,6 +621,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-flute-41.mp4",
     "use_video_url": true,
     "video_storage_path": "M-flute-41.mp4",
+    "youtube_url": "https://youtube.com/shorts/_MvddarnCjs?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -598,6 +637,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-bottom-42.mp4",
     "use_video_url": true,
     "video_storage_path": "M-bottom-42.mp4",
+    "youtube_url": "https://youtube.com/shorts/wb9YBiRYbr0?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -613,6 +653,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-brother-43.mp4",
     "use_video_url": true,
     "video_storage_path": "M-brother-43.mp4",
+    "youtube_url": "https://youtube.com/shorts/U0S7X2te99o?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -628,6 +669,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-no-46.mp4",
     "use_video_url": true,
     "video_storage_path": "M-no-46.mp4",
+    "youtube_url": "https://youtube.com/shorts/LAnT1wMIgbw?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -643,6 +685,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-step-47.mp4",
     "use_video_url": true,
     "video_storage_path": "M-step-47.mp4",
+    "youtube_url": "https://youtube.com/shorts/ofC-1qX3yS4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -658,6 +701,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-cloth-48.mp4",
     "use_video_url": true,
     "video_storage_path": "M-cloth-48.mp4",
+    "youtube_url": "https://youtube.com/shorts/_osRjWzL8pc?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -673,6 +717,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-throwoneself-49.mp4",
     "use_video_url": true,
     "video_storage_path": "M-throwoneself-49.mp4",
+    "youtube_url": "https://youtube.com/shorts/g3eqf--Wy90?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -688,6 +733,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-waterfall-50.mp4",
     "use_video_url": true,
     "video_storage_path": "M-waterfall-50.mp4",
+    "youtube_url": "https://youtube.com/shorts/QxVpU_R1wdM?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -703,6 +749,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-mother-51.mp4",
     "use_video_url": true,
     "video_storage_path": "M-mother-51.mp4",
+    "youtube_url": "https://youtube.com/shorts/8GGE4NLo9ts?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -718,6 +765,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-unitofarea-52.mp4",
     "use_video_url": true,
     "video_storage_path": "M-unitofarea-52.mp4",
+    "youtube_url": "https://youtube.com/shorts/a5J3Rogkqv4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -733,6 +781,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-eyecontact-53.mp4",
     "use_video_url": true,
     "video_storage_path": "M-eyecontact-53.mp4",
+    "youtube_url": "https://youtube.com/shorts/_bXv9RdTd0U?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -748,6 +797,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-wood-54.mp4",
     "use_video_url": true,
     "video_storage_path": "M-wood-54.mp4",
+    "youtube_url": "https://youtube.com/shorts/1sAYIctCbHU?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -763,6 +813,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-curtain-55.mp4",
     "use_video_url": true,
     "video_storage_path": "M-curtain-55.mp4",
+    "youtube_url": "https://youtube.com/shorts/gGFard8-Ytg?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -778,6 +829,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-topay-56.mp4",
     "use_video_url": true,
     "video_storage_path": "M-topay-56.mp4",
+    "youtube_url": "https://youtube.com/shorts/-WPZ0w3KdI4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -793,6 +845,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-father-57.mp4",
     "use_video_url": true,
     "video_storage_path": "M-father-57.mp4",
+    "youtube_url": "https://youtube.com/shorts/_stBUDSB12o?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -808,6 +861,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-woman-58.mp4",
     "use_video_url": true,
     "video_storage_path": "M-woman-58.mp4",
+    "youtube_url": "https://youtube.com/shorts/zRTOE5ulWwE?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -823,6 +877,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-rich-59.mp4",
     "use_video_url": true,
     "video_storage_path": "M-rich-59.mp4",
+    "youtube_url": "https://youtube.com/shorts/TrveNhqeiNo?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -838,6 +893,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-tocarry-60.mp4",
     "use_video_url": true,
     "video_storage_path": "M-tocarry-60.mp4",
+    "youtube_url": "https://youtube.com/shorts/ewVlFuTPfEg?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -853,6 +909,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-blessing-61.mp4",
     "use_video_url": true,
     "video_storage_path": "M-blessing-61.mp4",
+    "youtube_url": "https://youtube.com/shorts/u7J7HI6ywBA?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -868,6 +925,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-tohelpup-62.mp4",
     "use_video_url": true,
     "video_storage_path": "M-tohelpup-62.mp4",
+    "youtube_url": "https://youtube.com/shorts/JSF9BBYl23g?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -883,6 +941,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-clothes-63.mp4",
     "use_video_url": true,
     "video_storage_path": "M-clothes-63.mp4",
+    "youtube_url": "https://youtube.com/shorts/Ve8d-YEhhSA?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -898,6 +957,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-rotten-64.mp4",
     "use_video_url": true,
     "video_storage_path": "M-rotten-64.mp4",
+    "youtube_url": "https://youtube.com/shorts/0R5yFgmT-eQ?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -913,6 +973,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-tostroke-65.mp4",
     "use_video_url": true,
     "video_storage_path": "M-tostroke-65.mp4",
+    "youtube_url": "https://youtube.com/shorts/oRvxYZaN9Ss?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -928,6 +989,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-measure-66.mp4",
     "use_video_url": true,
     "video_storage_path": "M-measure-66.mp4",
+    "youtube_url": "https://youtube.com/shorts/V2hOPbtQ_a4?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -943,6 +1005,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-belly-67.mp4",
     "use_video_url": true,
     "video_storage_path": "M-belly-67.mp4",
+    "youtube_url": "https://youtube.com/shorts/dQZOIg9QyKE?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -958,6 +1021,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-poison-68.mp4",
     "use_video_url": true,
     "video_storage_path": "M-poison-68.mp4",
+    "youtube_url": "https://youtube.com/shorts/4JxqTayE8Bg?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -973,6 +1037,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-toread-70.mp4",
     "use_video_url": true,
     "video_storage_path": "M-toread-70.mp4",
+    "youtube_url": "https://youtube.com/shorts/BJobal1wSk0?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -988,6 +1053,7 @@ export const words: WordMetadata[] = [
     "video_url": "/videos/M-toblock-71.mp4",
     "use_video_url": true,
     "video_storage_path": "M-toblock-71.mp4",
+    "youtube_url": "https://youtube.com/shorts/IIyGwXGe7mM?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
   }

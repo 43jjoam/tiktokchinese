@@ -9,8 +9,13 @@ import {
   savePersistedState,
   type AppMeta,
 } from '../lib/storage'
+import { getSupabaseClient } from '../lib/deckService'
 import { getLikeStatus, toggleLike } from '../lib/likeService'
-import { createLessonVideoSignedUrl } from '../lib/storageVideoUrl'
+import {
+  createLessonVideoSignedUrl,
+  peekCachedLessonVideoSignedUrl,
+  prefetchLessonVideoSignedUrls,
+} from '../lib/storageVideoUrl'
 import { words as wordDataset } from '../data/words'
 
 const LOOP_MS = 5000
@@ -464,6 +469,16 @@ export default function VideoFeed() {
     void ensureYouTubeAPI()
   }, [])
 
+  const prefetchBootPath = useMemo(() => {
+    const id = loadCurrentWordId()
+    const w = id ? words.find((x) => x.word_id === id) : undefined
+    return w?.video_storage_path
+  }, [words])
+
+  useEffect(() => {
+    prefetchLessonVideoSignedUrls(words, { prioritizePath: prefetchBootPath })
+  }, [words, prefetchBootPath])
+
   const locale = useMemo(() => detectSupportedLocale(), [])
   const rawLang = useMemo(() => getRawLangCode(), [])
   const isNativelySupported = useMemo(
@@ -507,26 +522,55 @@ export default function VideoFeed() {
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
 
-  const ytId = useMemo(() => {
-    if (currentWord.use_video_url) return null
+  const extractedYoutubeId = useMemo(() => {
     if (!currentWord.youtube_url) return null
     return extractYouTubeId(currentWord.youtube_url)
-  }, [currentWord.youtube_url, currentWord.use_video_url])
+  }, [currentWord.youtube_url])
+
+  /** After native Storage + video_url both error, play youtube_url (Shorts) if present. */
+  const [youtubeFallback, setYoutubeFallback] = useState(false)
+
+  const ytId = useMemo(() => {
+    if (!extractedYoutubeId) return null
+    if (currentWord.use_video_url) return youtubeFallback ? extractedYoutubeId : null
+    return extractedYoutubeId
+  }, [currentWord.use_video_url, extractedYoutubeId, youtubeFallback])
 
   /** Private Supabase Storage: native <video> uses a time-limited signed URL. */
   const needsSignedNativeUrl = Boolean(
     currentWord.use_video_url && currentWord.video_storage_path?.trim(),
   )
 
-  const [signedNativeVideoSrc, setSignedNativeVideoSrc] = useState<string | null>(null)
+  /** Signed Storage URL, or same-origin video_url fallback if Supabase/signing fails. */
+  const [nativePlaybackSrc, setNativePlaybackSrc] = useState<string | null>(null)
 
   useEffect(() => {
+    setYoutubeFallback(false)
     if (!needsSignedNativeUrl || !currentWord.video_storage_path) {
-      setSignedNativeVideoSrc(null)
+      setNativePlaybackSrc(null)
       return
     }
+
+    const fallback = currentWord.video_url
+    const client = getSupabaseClient()
+    if (!client) {
+      console.warn('[VideoFeed] No Supabase client — playing video_url fallback:', fallback)
+      setNativePlaybackSrc(fallback)
+      return
+    }
+
+    const cached = peekCachedLessonVideoSignedUrl(
+      currentWord.video_storage_path,
+      currentWord.video_storage_bucket,
+    )
+    if (cached) {
+      setNativePlaybackSrc(cached)
+      return
+    }
+
     let cancelled = false
-    setSignedNativeVideoSrc(null)
+    setNativePlaybackSrc(null)
+
     void (async () => {
       const result = await createLessonVideoSignedUrl(
         currentWord.video_storage_path!,
@@ -534,10 +578,10 @@ export default function VideoFeed() {
       )
       if (cancelled) return
       if ('url' in result) {
-        setSignedNativeVideoSrc(result.url)
+        setNativePlaybackSrc(result.url)
       } else {
-        console.error('[VideoFeed] signed video URL:', result.error)
-        setSignedNativeVideoSrc(null)
+        console.warn('[VideoFeed] Signed URL failed, using video_url fallback:', result.error)
+        setNativePlaybackSrc(fallback)
       }
     })()
     return () => {
@@ -545,6 +589,7 @@ export default function VideoFeed() {
     }
   }, [
     currentWord.word_id,
+    currentWord.video_url,
     needsSignedNativeUrl,
     currentWord.video_storage_path,
     currentWord.video_storage_bucket,
@@ -1053,10 +1098,10 @@ export default function VideoFeed() {
             onPlaying={() => setVideoReady(true)}
           />
         ) : needsSignedNativeUrl ? (
-          signedNativeVideoSrc ? (
+          nativePlaybackSrc ? (
             <video
               key={currentWord.word_id}
-              src={signedNativeVideoSrc}
+              src={nativePlaybackSrc}
               autoPlay
               muted
               loop
@@ -1066,6 +1111,23 @@ export default function VideoFeed() {
               style={{ pointerEvents: 'none' }}
               onLoadedData={() => setVideoReady(true)}
               onCanPlay={() => setVideoReady(true)}
+              onError={() => {
+                const w = currentWordRef.current
+                const fb = w.video_url
+                setNativePlaybackSrc((prev) => {
+                  if (prev !== fb) {
+                    console.warn('[VideoFeed] Video error — switching to video_url:', fb)
+                    return fb
+                  }
+                  const yid = w.youtube_url ? extractYouTubeId(w.youtube_url) : null
+                  if (yid) {
+                    queueMicrotask(() => setYoutubeFallback(true))
+                  } else {
+                    console.warn('[VideoFeed] Native video failed and no youtube_url fallback')
+                  }
+                  return prev
+                })
+              }}
               onEnded={(ev) => {
                 const v = ev.currentTarget
                 try {
