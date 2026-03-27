@@ -10,6 +10,7 @@ import {
   type AppMeta,
 } from '../lib/storage'
 import { getLikeStatus, toggleLike } from '../lib/likeService'
+import { createLessonVideoSignedUrl } from '../lib/storageVideoUrl'
 import { words as wordDataset } from '../data/words'
 
 const LOOP_MS = 5000
@@ -512,6 +513,59 @@ export default function VideoFeed() {
     return extractYouTubeId(currentWord.youtube_url)
   }, [currentWord.youtube_url, currentWord.use_video_url])
 
+  /** Private Supabase Storage: native <video> uses a time-limited signed URL. */
+  const needsSignedNativeUrl = Boolean(
+    currentWord.use_video_url && currentWord.video_storage_path?.trim(),
+  )
+
+  const [signedNativeVideoSrc, setSignedNativeVideoSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!needsSignedNativeUrl || !currentWord.video_storage_path) {
+      setSignedNativeVideoSrc(null)
+      return
+    }
+    let cancelled = false
+    setSignedNativeVideoSrc(null)
+    void (async () => {
+      const result = await createLessonVideoSignedUrl(
+        currentWord.video_storage_path!,
+        currentWord.video_storage_bucket,
+      )
+      if (cancelled) return
+      if ('url' in result) {
+        setSignedNativeVideoSrc(result.url)
+      } else {
+        console.error('[VideoFeed] signed video URL:', result.error)
+        setSignedNativeVideoSrc(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    currentWord.word_id,
+    needsSignedNativeUrl,
+    currentWord.video_storage_path,
+    currentWord.video_storage_bucket,
+  ])
+
+  const videoLikeKey = useMemo(
+    () =>
+      currentWord.youtube_url ||
+      currentWord.video_storage_path ||
+      currentWord.video_url,
+    [currentWord.youtube_url, currentWord.video_storage_path, currentWord.video_url],
+  )
+
+  const qualityVideoId = useMemo(
+    () =>
+      currentWord.video_storage_path
+        ? `storage:${currentWord.video_storage_path}`
+        : currentWord.video_url,
+    [currentWord.video_storage_path, currentWord.video_url],
+  )
+
   const elapsedMsRef = useRef(0)
   const sessionStartMsRef = useRef<number>(Date.now())
   const rafRef = useRef<number | null>(null)
@@ -554,12 +608,12 @@ export default function VideoFeed() {
   const [videoReady, setVideoReady] = useState(false)
 
   useEffect(() => {
-    if (!ytId) return
+    if (!ytId && !needsSignedNativeUrl) return
     const t = window.setTimeout(() => {
       setVideoReady((r) => r || true)
     }, 12000)
     return () => window.clearTimeout(t)
-  }, [currentWord.word_id, ytId])
+  }, [currentWord.word_id, ytId, needsSignedNativeUrl])
 
   const [liked, setLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
@@ -621,15 +675,14 @@ export default function VideoFeed() {
   }, [currentWordId])
 
   useEffect(() => {
-    const videoKey = currentWord.youtube_url || currentWord.video_url
     let cancelled = false
-    getLikeStatus(videoKey).then((s) => {
+    getLikeStatus(videoLikeKey).then((s) => {
       if (cancelled) return
       setLiked(s.liked)
       setLikeCount(s.count)
     })
     return () => { cancelled = true }
-  }, [currentWord.word_id, currentWord.youtube_url, currentWord.video_url])
+  }, [currentWord.word_id, videoLikeKey])
 
   const chooseNextWordFromBuckets = (excludeWordId?: string) => {
     const roll = Math.random()
@@ -714,7 +767,7 @@ export default function VideoFeed() {
 
     const signals: SessionSignals = {
       word_id: currentWord.word_id,
-      video_id: currentWord.video_url,
+      video_id: qualityVideoId,
       swipeDirection,
       loopsElapsed,
       tapOccurred,
@@ -740,7 +793,6 @@ export default function VideoFeed() {
       nowMs,
     })
 
-    const qualityVideoId = currentWord.video_url
     const prevQuality = videoQuality[qualityVideoId] ?? {
       video_id: qualityVideoId,
       views: 0,
@@ -786,20 +838,18 @@ export default function VideoFeed() {
   const doLikeRef = useRef<() => void>(() => {})
   doLikeRef.current = () => {
     if (likedRef.current) return
-    const videoKey = currentWord.youtube_url || currentWord.video_url
     setLiked(true)
     setLikeCount((c) => c + 1)
-    toggleLike(videoKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
+    toggleLike(videoLikeKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
   }
 
   const handleHeartToggle = useCallback(() => {
-    const videoKey = currentWord.youtube_url || currentWord.video_url
     const wasLiked = likedRef.current
     setLiked(!wasLiked)
     setLikeCount((c) => wasLiked ? Math.max(0, c - 1) : c + 1)
     if (!wasLiked) triggerLikeBurst()
-    toggleLike(videoKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
-  }, [currentWord.youtube_url, currentWord.video_url, triggerLikeBurst])
+    toggleLike(videoLikeKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
+  }, [videoLikeKey, triggerLikeBurst])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)
@@ -1002,6 +1052,29 @@ export default function VideoFeed() {
             videoId={ytId}
             onPlaying={() => setVideoReady(true)}
           />
+        ) : needsSignedNativeUrl ? (
+          signedNativeVideoSrc ? (
+            <video
+              key={currentWord.word_id}
+              src={signedNativeVideoSrc}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              className="h-full w-full object-cover"
+              style={{ pointerEvents: 'none' }}
+              onLoadedData={() => setVideoReady(true)}
+              onCanPlay={() => setVideoReady(true)}
+              onEnded={(ev) => {
+                const v = ev.currentTarget
+                try {
+                  v.currentTime = 0
+                  void v.play()
+                } catch {}
+              }}
+            />
+          ) : null
         ) : (
           <video
             key={currentWord.video_url}

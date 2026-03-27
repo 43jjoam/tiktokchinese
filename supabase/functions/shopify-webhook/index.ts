@@ -130,8 +130,29 @@ Deno.serve(async (req) => {
   }
 
   const order = JSON.parse(body);
-  const email = order.email || order.contact_email;
+  const email =
+    order.email ||
+    order.contact_email ||
+    order.customer?.email ||
+    order.billing_address?.email ||
+    null;
+
+  console.log(
+    JSON.stringify({
+      tag: "shopify_webhook_order",
+      orderId: order.id ?? order.name ?? null,
+      hasEmail: Boolean(email),
+      lineItemCount: order.line_items?.length ?? 0,
+    }),
+  );
+
   if (!email) {
+    console.warn(
+      JSON.stringify({
+        tag: "shopify_webhook_no_email",
+        orderKeys: order ? Object.keys(order).slice(0, 40) : [],
+      }),
+    );
     return new Response("No email in order", { status: 400 });
   }
 
@@ -141,6 +162,14 @@ Deno.serve(async (req) => {
   for (const item of order.line_items ?? []) {
     const deckId = findDeckId(item.sku ?? "", item.title ?? "");
     if (!deckId) {
+      console.log(
+        JSON.stringify({
+          tag: "shopify_webhook_skip_line",
+          sku: item.sku ?? null,
+          title: item.title ?? null,
+          reason: "no_matching_deck",
+        }),
+      );
       results.push(`Skipped: ${item.title} (no matching deck)`);
       continue;
     }
@@ -156,6 +185,14 @@ Deno.serve(async (req) => {
     ) ?? null;
 
     if (codeErr || !codeRow) {
+      console.error(
+        JSON.stringify({
+          tag: "shopify_webhook_no_code",
+          deckId,
+          codeErr: codeErr?.message ?? null,
+          rowCount: codeRows?.length ?? 0,
+        }),
+      );
       results.push(`ERROR: No unused codes left for deck ${deckId}`);
       continue;
     }
@@ -168,7 +205,25 @@ Deno.serve(async (req) => {
 
     const deckName = deck?.name ?? item.title ?? "Flashcard Deck";
 
-    await sendEmail(email, codeRow.code, deckName);
+    try {
+      await sendEmail(email, codeRow.code, deckName);
+      console.log(
+        JSON.stringify({
+          tag: "shopify_webhook_email_sent",
+          deckId,
+          deckName,
+        }),
+      );
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          tag: "shopify_webhook_resend_failed",
+          deckId,
+          error: String(e),
+        }),
+      );
+      throw e;
+    }
 
     results.push(`Sent code for ${deckName} to ${email}`);
   }

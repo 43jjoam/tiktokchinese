@@ -8,6 +8,8 @@ export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? './' : '/',
   server: {
     port: 5173,
+    // Listen on LAN so you can open http://<your-mac-ip>:5173 on a phone (same Wi‑Fi).
+    host: true,
   },
 })
 

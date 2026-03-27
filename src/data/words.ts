@@ -11,7 +11,8 @@ export const words: WordMetadata[] = [
       "th": "พ่อ (phôr)"
     },
     "video_url": "/videos/M-dad-01.mp4",
-    "youtube_url": "https://youtube.com/shorts/G1gj2iFq1cQ?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-dad-01.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -25,7 +26,8 @@ export const words: WordMetadata[] = [
       "th": "ส่งออก (sòng-rɔ̀ɔk)"
     },
     "video_url": "/videos/M-sendout-04.mp4",
-    "youtube_url": "https://youtube.com/shorts/8AQx3XlKFo0?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-sendout-04.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -39,7 +41,8 @@ export const words: WordMetadata[] = [
       "th": "กลัว (gluua)"
     },
     "video_url": "/videos/M-fear-03.mp4",
-    "youtube_url": "https://youtube.com/shorts/AJiWAjCumf4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-fear-03.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -53,7 +56,8 @@ export const words: WordMetadata[] = [
       "th": "ผม (pǒm)"
     },
     "video_url": "/videos/M-hair-05.mp4",
-    "youtube_url": "https://youtube.com/shorts/_2LBJ29tuSo?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-hair-05.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -67,7 +71,8 @@ export const words: WordMetadata[] = [
       "th": "ตี"
     },
     "video_url": "/videos/M-hitdrum-06.mp4",
-    "youtube_url": "https://youtube.com/shorts/8EvUYc2PdRY?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-hitdrum-06.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -81,7 +86,8 @@ export const words: WordMetadata[] = [
       "th": "ใหญ่ (yài)"
     },
     "video_url": "/videos/M-big-07.mp4",
-    "youtube_url": "https://youtube.com/shorts/saSvRZCXvPs?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-big-07.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -95,7 +101,8 @@ export const words: WordMetadata[] = [
       "th": "ม้า (máa)"
     },
     "video_url": "/videos/M-horse-08.mp4",
-    "youtube_url": "https://youtube.com/shorts/EEM6IQdfhmc?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-horse-08.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -109,7 +116,8 @@ export const words: WordMetadata[] = [
       "th": "คลาน, ปีน (khlaan, bpiin)"
     },
     "video_url": "/videos/M-climb-09.mp4",
-    "youtube_url": "https://youtube.com/shorts/y1ZKMujVMSI?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-climb-09.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -123,7 +131,8 @@ export const words: WordMetadata[] = [
       "th": "ด่า (dàa)"
     },
     "video_url": "/videos/M-scold-10.mp4",
-    "youtube_url": "https://youtube.com/shorts/Tukm0KpZPl0?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-scold-10.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -137,7 +146,8 @@ export const words: WordMetadata[] = [
       "th": "ออกอากาศ, หว่าน (rɔ̀ɔk-aa-gàat, wàan)"
     },
     "video_url": "/videos/M-brodcast-11.mp4",
-    "youtube_url": "https://youtube.com/shorts/5r6xVnLz1l0?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-brodcast-11.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -151,7 +161,8 @@ export const words: WordMetadata[] = [
       "th": "อา, ลุง (aa, lung)"
     },
     "video_url": "/videos/M-uncle-12.mp4",
-    "youtube_url": "https://youtube.com/shorts/nNCiD2Hz3A4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-uncle-12.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -165,7 +176,8 @@ export const words: WordMetadata[] = [
       "th": "สาด, สาดน้ำ (sàat, sàat-nám)"
     },
     "video_url": "/videos/M-splash-13.mp4",
-    "youtube_url": "https://youtube.com/shorts/a-6t-UGrcRg?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-splash-13.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -179,7 +191,8 @@ export const words: WordMetadata[] = [
       "th": "ยาย, หญิงชรา (yaai, yǐng-cha-raa)"
     },
     "video_url": "/videos/M-oldwoman-14.mp4",
-    "youtube_url": "https://youtube.com/shorts/nnaUXmmqKLQ?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-oldwoman-14.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -193,7 +206,8 @@ export const words: WordMetadata[] = [
       "th": "แตก, ชำรุด (dtàek, cham-rút)"
     },
     "video_url": "/videos/M-tobreak-15.mp4",
-    "youtube_url": "https://youtube.com/shorts/NfV4YED8t-4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-tobreak-15.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -207,7 +221,8 @@ export const words: WordMetadata[] = [
       "th": "สัมผัส, คลำ (sǎm-pàt, khlaam)"
     },
     "video_url": "/videos/M-totouch-16.mp4",
-    "youtube_url": "https://youtube.com/shorts/-TavlbVNPzw?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-totouch-16.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -221,7 +236,8 @@ export const words: WordMetadata[] = [
       "th": "ถู, ขัด (tǔu, kàt)"
     },
     "video_url": "/videos/M-rub-17.mp4",
-    "youtube_url": "https://youtube.com/shorts/HOns4fjWc4o?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-rub-17.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -235,7 +251,8 @@ export const words: WordMetadata[] = [
       "th": "ทา, เช็ด (thaa, chét)"
     },
     "video_url": "/videos/M-apply-18.mp4",
-    "youtube_url": "https://youtube.com/shorts/vW93gSku9P8?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-apply-18.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -249,7 +266,8 @@ export const words: WordMetadata[] = [
       "th": "เช็ด, ถู (chét, tǔu)"
     },
     "video_url": "/videos/M-wipe-19.mp4",
-    "youtube_url": "https://youtube.com/shorts/APp2ySmeteI?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-wipe-19.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -263,7 +281,8 @@ export const words: WordMetadata[] = [
       "th": "เงียบ, นิ่ง (ngîiap, nîng)"
     },
     "video_url": "/videos/M-silent-20.mp4",
-    "youtube_url": "https://youtube.com/shorts/jmM5whTa3e8?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-silent-20.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -277,7 +296,8 @@ export const words: WordMetadata[] = [
       "th": "ฟอง, น้ำลาย (fɔɔng, náam-laai)"
     },
     "video_url": "/videos/M-foam-21.mp4",
-    "youtube_url": "https://youtube.com/shorts/n54ZIqYmfHA?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-foam-21.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -291,7 +311,8 @@ export const words: WordMetadata[] = [
       "th": "ของ (kɔ̌ɔng)"
     },
     "video_url": "/videos/M-of-22.mp4",
-    "youtube_url": "https://youtube.com/shorts/Tn_hkVuw8CE?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-of-22.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -305,7 +326,8 @@ export const words: WordMetadata[] = [
       "th": "คุณธรรม, ศีลธรรม (khun-ná-tham, sǐin-ná-tham)"
     },
     "video_url": "/videos/M-morals-24.mp4",
-    "youtube_url": "https://youtube.com/shorts/I1DFx2DOA-Q?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-morals-24.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -319,7 +341,8 @@ export const words: WordMetadata[] = [
       "th": "พระพุทธเจ้า (prá-pút-tá-jâo)"
     },
     "video_url": "/videos/M-budda-25.mp4",
-    "youtube_url": "https://youtube.com/shorts/Obr8qW04i9o?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-budda-25.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -333,7 +356,8 @@ export const words: WordMetadata[] = [
       "th": "บังคับ, ใกล้เข้ามา (bang-kháp, glâi-khâo-maa)"
     },
     "video_url": "/videos/M-compel-26.mp4",
-    "youtube_url": "https://youtube.com/shorts/DpoG52_EeGw?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-compel-26.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -347,7 +371,8 @@ export const words: WordMetadata[] = [
       "th": "จมูก (jà-mùuk)"
     },
     "video_url": "/videos/M-nose-27.mp4",
-    "youtube_url": "https://youtube.com/shorts/rSq7PUv6Qtw?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-nose-27.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -361,7 +386,8 @@ export const words: WordMetadata[] = [
       "th": "ปากกา, พู่กัน (bpàak-gaa, phûu-gan)"
     },
     "video_url": "/videos/M-pen-28.mp4",
-    "youtube_url": "https://youtube.com/shorts/W2ag11tR3rs?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-pen-28.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -375,7 +401,8 @@ export const words: WordMetadata[] = [
       "th": "ปิด (bpìt)"
     },
     "video_url": "/videos/M-close-29.mp4",
-    "youtube_url": "https://youtube.com/shorts/T7IIBALDi94?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-close-29.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -389,7 +416,8 @@ export const words: WordMetadata[] = [
       "th": "ตำหนิ; ชุด, ล็อต (dtam-nì; chút, lɔ́t)"
     },
     "video_url": "/videos/M-criticize-30.mp4",
-    "youtube_url": "https://youtube.com/shorts/WbjsouQRNw8?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-criticize-30.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -403,7 +431,8 @@ export const words: WordMetadata[] = [
       "th": "ผิว, หนัง, เปลือก (pǐw, nǎng, bplʉ̀ʉak)"
     },
     "video_url": "/videos/M-skin-31.mp4",
-    "youtube_url": "https://youtube.com/shorts/ieg8OaKa448?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-skin-31.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -417,7 +446,8 @@ export const words: WordMetadata[] = [
       "th": "อันธพาล, คนพาล (an-tá-phaan, khon-phaan)"
     },
     "video_url": "/videos/M-rogue-32.mp4",
-    "youtube_url": "https://youtube.com/shorts/oxg-ZD0TW5g?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-rogue-32.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -431,7 +461,8 @@ export const words: WordMetadata[] = [
       "th": "เหนื่อยล้า (nʉ̀ʉay-láa)"
     },
     "video_url": "/videos/M-tired-33.mp4",
-    "youtube_url": "https://youtube.com/shorts/HyRM4Kb5cHk?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-tired-33.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -445,7 +476,8 @@ export const words: WordMetadata[] = [
       "th": "ตด, เรื่องไร้สาระ (dtòt, rʉ̂ʉang-rái-sǎa-rà)"
     },
     "video_url": "/videos/M-fart-34.mp4",
-    "youtube_url": "https://youtube.com/shorts/mdePEHi_9lM?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-fart-34.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -459,7 +491,8 @@ export const words: WordMetadata[] = [
       "th": "เมี๊ยว; ยิ้ม (míao; yím)"
     },
     "video_url": "/videos/M-meow-35.mp4",
-    "youtube_url": "https://youtube.com/shorts/jvMjnMuMg-k?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-meow-35.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -473,7 +506,8 @@ export const words: WordMetadata[] = [
       "th": "หลงใหล, หลงทาง; แฟนคลับ (lǒng-lǎi, lǒng-thaang; faen-khlàp)"
     },
     "video_url": "/videos/M-lost-36.mp4",
-    "youtube_url": "https://youtube.com/shorts/UdWPWDwOpRQ?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-lost-36.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -487,7 +521,8 @@ export const words: WordMetadata[] = [
       "th": "ข้าว, เมตร (khâao, mêet)"
     },
     "video_url": "/videos/M-rice-37.mp4",
-    "youtube_url": "https://youtube.com/shorts/_ZK1VOPugd0?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-rice-37.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -501,7 +536,8 @@ export const words: WordMetadata[] = [
       "th": "หนาแน่น, ลับ, สนิท (nǎa-nâen, láp, sà-nìt)"
     },
     "video_url": "/videos/M-dense-38.mp4",
-    "youtube_url": "https://youtube.com/shorts/RzGJnfMFja8?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-dense-38.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -515,7 +551,8 @@ export const words: WordMetadata[] = [
       "th": "ความลับ, ความเร้นลับ (khwaam-láp, khwaam-rên-láp)"
     },
     "video_url": "/videos/M-secret-39.mp4",
-    "youtube_url": "https://youtube.com/shorts/R_SBLuoQKU8?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-secret-39.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -529,7 +566,8 @@ export const words: WordMetadata[] = [
       "th": "หยด; หยด (yòt; yòt)"
     },
     "video_url": "/videos/M-drop-40.mp4",
-    "youtube_url": "https://youtube.com/shorts/D5O80tREl7A?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-drop-40.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -543,7 +581,8 @@ export const words: WordMetadata[] = [
       "th": "ขลุ่ย, นกหวีด (khlùi, nók-wìit)"
     },
     "video_url": "/videos/M-flute-41.mp4",
-    "youtube_url": "https://youtube.com/shorts/_MvddarnCjs?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-flute-41.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -557,7 +596,8 @@ export const words: WordMetadata[] = [
       "th": "ก้น, ฐาน, พื้นหลัง (gôn, thǎan, phʉ́ʉn-lǎng)"
     },
     "video_url": "/videos/M-bottom-42.mp4",
-    "youtube_url": "https://youtube.com/shorts/wb9YBiRYbr0?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-bottom-42.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -571,7 +611,8 @@ export const words: WordMetadata[] = [
       "th": "น้องชาย (nɔ́ɔng-chaai)"
     },
     "video_url": "/videos/M-brother-43.mp4",
-    "youtube_url": "https://youtube.com/shorts/U0S7X2te99o?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-brother-43.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -585,7 +626,8 @@ export const words: WordMetadata[] = [
       "th": "ไม่ (mâi)"
     },
     "video_url": "/videos/M-no-46.mp4",
-    "youtube_url": "https://youtube.com/shorts/LAnT1wMIgbw?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-no-46.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -599,7 +641,8 @@ export const words: WordMetadata[] = [
       "th": "ก้าว, ขั้น (gâao, khân)"
     },
     "video_url": "/videos/M-step-47.mp4",
-    "youtube_url": "https://youtube.com/shorts/ofC-1qX3yS4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-step-47.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -613,7 +656,8 @@ export const words: WordMetadata[] = [
       "th": "ผ้า, กระจาย (phâa, grà-jaai)"
     },
     "video_url": "/videos/M-cloth-48.mp4",
-    "youtube_url": "https://youtube.com/shorts/_osRjWzL8pc?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-cloth-48.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -627,7 +671,8 @@ export const words: WordMetadata[] = [
       "th": "พุ่งใส่, โฉบ (phûng-sài, chòop)"
     },
     "video_url": "/videos/M-throwoneself-49.mp4",
-    "youtube_url": "https://youtube.com/shorts/g3eqf--Wy90?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-throwoneself-49.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -641,7 +686,8 @@ export const words: WordMetadata[] = [
       "th": "น้ำตก (nám-dtòk)"
     },
     "video_url": "/videos/M-waterfall-50.mp4",
-    "youtube_url": "https://youtube.com/shorts/QxVpU_R1wdM?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-waterfall-50.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -655,7 +701,8 @@ export const words: WordMetadata[] = [
       "th": "แม่, ตัวเมีย (mâe, dtuua-miia)"
     },
     "video_url": "/videos/M-mother-51.mp4",
-    "youtube_url": "https://youtube.com/shorts/8GGE4NLo9ts?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-mother-51.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -669,7 +716,8 @@ export const words: WordMetadata[] = [
       "th": "หน่วยพื้นที่ (mǔuai-phʉ́ʉn-thîi)"
     },
     "video_url": "/videos/M-unitofarea-52.mp4",
-    "youtube_url": "https://youtube.com/shorts/a5J3Rogkqv4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-unitofarea-52.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -683,7 +731,8 @@ export const words: WordMetadata[] = [
       "th": "ตา, รายการ (dtaa, raai-gaan)"
     },
     "video_url": "/videos/M-eyecontact-53.mp4",
-    "youtube_url": "https://youtube.com/shorts/_bXv9RdTd0U?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-eyecontact-53.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -697,7 +746,8 @@ export const words: WordMetadata[] = [
       "th": "ไม้, ต้นไม้ (mái, dtôn-mái)"
     },
     "video_url": "/videos/M-wood-54.mp4",
-    "youtube_url": "https://youtube.com/shorts/1sAYIctCbHU?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-wood-54.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -711,7 +761,8 @@ export const words: WordMetadata[] = [
       "th": "ม่าน, ฉาก (mâan, chàak)"
     },
     "video_url": "/videos/M-curtain-55.mp4",
-    "youtube_url": "https://youtube.com/shorts/gGFard8-Ytg?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-curtain-55.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -725,7 +776,8 @@ export const words: WordMetadata[] = [
       "th": "จ่าย, มอบให้ (jàai, mâwp-hâi)"
     },
     "video_url": "/videos/M-topay-56.mp4",
-    "youtube_url": "https://youtube.com/shorts/-WPZ0w3KdI4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-topay-56.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -739,7 +791,8 @@ export const words: WordMetadata[] = [
       "th": "พ่อ (phôr)"
     },
     "video_url": "/videos/M-father-57.mp4",
-    "youtube_url": "https://youtube.com/shorts/_stBUDSB12o?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-father-57.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -753,7 +806,8 @@ export const words: WordMetadata[] = [
       "th": "ผู้หญิง, ภรรยา (phûu-yǐng, pan-rá-yaa)"
     },
     "video_url": "/videos/M-woman-58.mp4",
-    "youtube_url": "https://youtube.com/shorts/zRTOE5ulWwE?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-woman-58.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -767,7 +821,8 @@ export const words: WordMetadata[] = [
       "th": "รวย, มั่งคั่ง (ruuay, mâng-khâng)"
     },
     "video_url": "/videos/M-rich-59.mp4",
-    "youtube_url": "https://youtube.com/shorts/TrveNhqeiNo?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-rich-59.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -781,7 +836,8 @@ export const words: WordMetadata[] = [
       "th": "แบก, รับ; ลบ; พ่ายแพ้ (bàek, ráp; lóp; phâai-pháe)"
     },
     "video_url": "/videos/M-tocarry-60.mp4",
-    "youtube_url": "https://youtube.com/shorts/ewVlFuTPfEg?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-tocarry-60.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -795,7 +851,8 @@ export const words: WordMetadata[] = [
       "th": "โชค, ความสุข (chôok, khwaam-sùk)"
     },
     "video_url": "/videos/M-blessing-61.mp4",
-    "youtube_url": "https://youtube.com/shorts/u7J7HI6ywBA?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-blessing-61.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -809,7 +866,8 @@ export const words: WordMetadata[] = [
       "th": "พยุง, ช่วยเหลือ (pá-yung, chûuay-lʉ̌ʉa)"
     },
     "video_url": "/videos/M-tohelpup-62.mp4",
-    "youtube_url": "https://youtube.com/shorts/JSF9BBYl23g?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-tohelpup-62.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -823,7 +881,8 @@ export const words: WordMetadata[] = [
       "th": "เสื้อผ้า; เชื่อฟัง; กินยา (sʉ̂ʉa-phâa; chʉ̂ʉa-fang; gin-yaa)"
     },
     "video_url": "/videos/M-clothes-63.mp4",
-    "youtube_url": "https://youtube.com/shorts/Ve8d-YEhhSA?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-clothes-63.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -837,7 +896,8 @@ export const words: WordMetadata[] = [
       "th": "เน่า, เสีย (nâo, sǐia)"
     },
     "video_url": "/videos/M-rotten-64.mp4",
-    "youtube_url": "https://youtube.com/shorts/0R5yFgmT-eQ?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-rotten-64.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -851,7 +911,8 @@ export const words: WordMetadata[] = [
       "th": "ปลอบ, ลูบ; เลี้ยงดู (bplɔ̀ɔp, lûup; líiang-duu)"
     },
     "video_url": "/videos/M-tostroke-65.mp4",
-    "youtube_url": "https://youtube.com/shorts/oRvxYZaN9Ss?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-tostroke-65.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -865,7 +926,8 @@ export const words: WordMetadata[] = [
       "th": "องศา, ขีดจำกัด, การวัด (oong-sǎa, khìit-jam-gàt, gaan-wát)"
     },
     "video_url": "/videos/M-measure-66.mp4",
-    "youtube_url": "https://youtube.com/shorts/V2hOPbtQ_a4?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-measure-66.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -879,7 +941,8 @@ export const words: WordMetadata[] = [
       "th": "ท้อง, พุง (thɔ́ng, phung)"
     },
     "video_url": "/videos/M-belly-67.mp4",
-    "youtube_url": "https://youtube.com/shorts/dQZOIg9QyKE?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-belly-67.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -893,7 +956,8 @@ export const words: WordMetadata[] = [
       "th": "พิษ, เป็นพิษ (pít, bpen-pít)"
     },
     "video_url": "/videos/M-poison-68.mp4",
-    "youtube_url": "https://youtube.com/shorts/4JxqTayE8Bg?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-poison-68.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -907,7 +971,8 @@ export const words: WordMetadata[] = [
       "th": "อ่าน, เรียน (àan, riian)"
     },
     "video_url": "/videos/M-toread-70.mp4",
-    "youtube_url": "https://youtube.com/shorts/BJobal1wSk0?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-toread-70.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   },
@@ -921,7 +986,8 @@ export const words: WordMetadata[] = [
       "th": "อุด, ขวาง (ùt, kwǎang)"
     },
     "video_url": "/videos/M-toblock-71.mp4",
-    "youtube_url": "https://youtube.com/shorts/IIyGwXGe7mM?feature=share",
+    "use_video_url": true,
+    "video_storage_path": "M-toblock-71.mp4",
     "base_complexity": 1.0,
     "dependencies": []
   }

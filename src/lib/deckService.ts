@@ -9,6 +9,11 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 }
 
+/** Shared browser client (anon) for storage signed URLs, deck activation, etc. */
+export function getSupabaseClient(): SupabaseClient | null {
+  return supabase
+}
+
 export type DeckInfo = {
   id: string
   name: string

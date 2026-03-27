@@ -13,6 +13,13 @@ export type WordMetadata = {
   youtube_url?: string
   /** When true, always play video_url in a native <video>; youtube_url is ignored for playback. */
   use_video_url?: boolean
+  /**
+   * Path inside a private Supabase Storage bucket (no leading slash), e.g. `hsk1/M-dad-01.mp4`.
+   * When set with use_video_url, the app calls createSignedUrl — use video_url as fallback label/id only.
+   */
+  video_storage_path?: string
+  /** Optional bucket; defaults to VITE_VIDEO_STORAGE_BUCKET. */
+  video_storage_bucket?: string
   base_complexity: number
   dependencies: WordId[]
   /** Feed item kind for profile / analytics. Defaults to character when omitted. */
