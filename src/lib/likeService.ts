@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { randomUuidV4 } from './randomUuid'
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -22,7 +23,10 @@ async function getIpHash(): Promise<string> {
     return cachedIpHash
   } catch {
     let uid = localStorage.getItem('tiktokchinese_uid')
-    if (!uid) { uid = crypto.randomUUID(); localStorage.setItem('tiktokchinese_uid', uid) }
+    if (!uid) {
+      uid = randomUuidV4()
+      localStorage.setItem('tiktokchinese_uid', uid)
+    }
     cachedIpHash = uid
     return uid
   }

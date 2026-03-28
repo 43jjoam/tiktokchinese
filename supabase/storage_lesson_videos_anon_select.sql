@@ -1,2 +1,3 @@
--- Superseded by setup_chinese_characters_1_videos.sql (bucket + anon + authenticated SELECT).
--- Run: supabase/setup_chinese_characters_1_videos.sql in the SQL Editor instead.
+-- Superseded — run in Supabase SQL Editor:
+--   supabase/setup_storage_private_buckets_all.sql
+-- (or setup_chinese_characters_1_videos.sql + setup_hsk1_videos.sql)

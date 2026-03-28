@@ -1,4 +1,5 @@
 import type { WordMetadata } from '../lib/types'
+import { hsk1Words } from './hsk1Words'
 
 export const words: WordMetadata[] = [
   {
@@ -1056,5 +1057,6 @@ export const words: WordMetadata[] = [
     "youtube_url": "https://youtube.com/shorts/IIyGwXGe7mM?feature=share",
     "base_complexity": 1.0,
     "dependencies": []
-  }
+  },
+  ...hsk1Words,
 ]

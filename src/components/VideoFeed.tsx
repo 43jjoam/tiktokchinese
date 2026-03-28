@@ -9,14 +9,18 @@ import {
   savePersistedState,
   type AppMeta,
 } from '../lib/storage'
-import { getSupabaseClient } from '../lib/deckService'
+import { BUILTIN_CHINESE_CHARACTERS_1, getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { getLikeStatus, toggleLike } from '../lib/likeService'
 import {
   createLessonVideoSignedUrl,
   peekCachedLessonVideoSignedUrl,
   prefetchLessonVideoSignedUrls,
 } from '../lib/storageVideoUrl'
-import { words as wordDataset } from '../data/words'
+import {
+  ACTIVATED_DECKS_CHANGED_EVENT,
+  buildHomeFeedWords,
+  getWordsForDeck,
+} from '../lib/deckWords'
 import { getSwipeEncouragementBundle, resolveSwipeEncouragementLang } from '../lib/swipeEncouragement'
 
 const LOOP_MS = 5000
@@ -526,8 +530,9 @@ function makeWordStateSeed(word: WordMetadata): WordState {
 }
 
 function pickRandomWord(ws: WordMetadata[]): WordMetadata {
-  const list = ws.length ? ws : wordDataset
-  return list[Math.floor(Math.random() * list.length)]
+  if (ws.length) return ws[Math.floor(Math.random() * ws.length)]
+  const fb = getWordsForDeck(BUILTIN_CHINESE_CHARACTERS_1)
+  return fb[Math.floor(Math.random() * fb.length)]
 }
 
 function pickNextWord(args: {
@@ -896,7 +901,24 @@ function YouTubePlayer({
 }
 
 export default function VideoFeed() {
-  const words: WordMetadata[] = wordDataset
+  /** Chinese Characters 1 by default; + purchased decks (e.g. HSK 1) after activation. */
+  const [words, setWords] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
+
+  useEffect(() => {
+    let cancelled = false
+    const refreshFeedWords = () => {
+      void getActivatedDecks().then((decks) => {
+        if (cancelled) return
+        setWords(buildHomeFeedWords(decks))
+      })
+    }
+    refreshFeedWords()
+    window.addEventListener(ACTIVATED_DECKS_CHANGED_EVENT, refreshFeedWords)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACTIVATED_DECKS_CHANGED_EVENT, refreshFeedWords)
+    }
+  }, [])
 
   useEffect(() => {
     void ensureYouTubeAPI()
@@ -965,7 +987,12 @@ export default function VideoFeed() {
     return extractYouTubeId(currentWord.youtube_url)
   }, [currentWord.youtube_url])
 
-  /** After native Storage + video_url both error, play youtube_url (Shorts) if present. */
+  /**
+   * When `use_video_url` is true: primary = Supabase signed URL (per-word bucket, e.g. Chinese
+   * Characters 1 or HSK_1). If signing fails or is unavailable and `youtube_url` exists, we switch
+   * here immediately (same as Characters 1 intent). Otherwise secondary = static `video_url`.
+   * Tertiary: native `<video>` onError after signed URL then `video_url` both fail → YouTube Shorts.
+   */
   const [youtubeFallback, setYoutubeFallback] = useState(false)
 
   const ytId = useMemo(() => {
@@ -979,7 +1006,7 @@ export default function VideoFeed() {
     currentWord.use_video_url && currentWord.video_storage_path?.trim(),
   )
 
-  /** Signed Storage URL, or same-origin video_url fallback if Supabase/signing fails. */
+  /** Signed Storage URL, or static `video_url` when no YouTube backup is configured. */
   const [nativePlaybackSrc, setNativePlaybackSrc] = useState<string | null>(null)
 
   useEffect(() => {
@@ -990,10 +1017,22 @@ export default function VideoFeed() {
     }
 
     const fallback = currentWord.video_url
+    const canUseYoutubeBackup = Boolean(extractedYoutubeId)
+
+    const goYoutubeBackup = () => {
+      setNativePlaybackSrc(null)
+      queueMicrotask(() => setYoutubeFallback(true))
+    }
+
     const client = getSupabaseClient()
     if (!client) {
-      console.warn('[VideoFeed] No Supabase client — playing video_url fallback:', fallback)
-      setNativePlaybackSrc(fallback)
+      if (canUseYoutubeBackup) {
+        console.warn('[VideoFeed] No Supabase client — using YouTube backup (youtube_url).')
+        goYoutubeBackup()
+      } else {
+        console.warn('[VideoFeed] No Supabase client — playing video_url fallback:', fallback)
+        setNativePlaybackSrc(fallback)
+      }
       return
     }
 
@@ -1017,8 +1056,11 @@ export default function VideoFeed() {
       if (cancelled) return
       if ('url' in result) {
         setNativePlaybackSrc(result.url)
+      } else if (canUseYoutubeBackup) {
+        console.warn('[VideoFeed] Signed URL failed — using YouTube backup:', result.error)
+        goYoutubeBackup()
       } else {
-        console.warn('[VideoFeed] Signed URL failed, using video_url fallback:', result.error)
+        console.warn('[VideoFeed] Signed URL failed, using video_url (no youtube_url on word):', result.error)
         setNativePlaybackSrc(fallback)
       }
     })()
@@ -1028,9 +1070,11 @@ export default function VideoFeed() {
   }, [
     currentWord.word_id,
     currentWord.video_url,
+    currentWord.youtube_url,
     needsSignedNativeUrl,
     currentWord.video_storage_path,
     currentWord.video_storage_bucket,
+    extractedYoutubeId,
   ])
 
   const videoLikeKey = useMemo(
@@ -1605,6 +1649,7 @@ export default function VideoFeed() {
               onLoadedData={() => markFeedPlayable()}
               onCanPlay={() => markFeedPlayable()}
               onError={() => {
+                // Tertiary backup: signed URL or first load failed decode → try static video_url → then YouTube.
                 const w = currentWordRef.current
                 const fb = w.video_url
                 setNativePlaybackSrc((prev) => {

@@ -2,6 +2,9 @@
 -- Chinese Characters 1 — Storage bucket + RLS for signed URLs (run once)
 -- Paste into Supabase → SQL Editor → Run.
 --
+-- Prefer: setup_storage_private_buckets_all.sql (this bucket + HSK_1 in one script).
+-- Signed URLs work for every site visitor with the anon key; policies are not per-purchaser.
+--
 -- After this:
 -- 1. Upload MP4s to the bucket with object keys EXACTLY matching video_storage_path
 --    in src/data/words.ts (e.g. M-dad-01.mp4 at bucket root, no extra folders).

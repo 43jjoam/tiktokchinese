@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { loadPersistedState } from '../lib/storage'
-import { words as wordDataset } from '../data/words'
+import { getActivatedDecks } from '../lib/deckService'
+import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
 import type { WordMetadata } from '../lib/types'
 
 const NAME_KEY = 'tiktokchinese_display_name'
@@ -245,12 +246,29 @@ function CategoryStrip({
 export default function ProfileTab() {
   const displayName = useMemo(() => getOrCreateName(), [])
   const [activeList, setActiveList] = useState<ActiveList | null>(null)
+  const [feedWordList, setFeedWordList] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
+
+  useEffect(() => {
+    let cancelled = false
+    const refresh = () => {
+      void getActivatedDecks().then((decks) => {
+        if (cancelled) return
+        setFeedWordList(buildHomeFeedWords(decks))
+      })
+    }
+    refresh()
+    window.addEventListener(ACTIVATED_DECKS_CHANGED_EVENT, refresh)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACTIVATED_DECKS_CHANGED_EVENT, refresh)
+    }
+  }, [])
 
   const persisted = loadPersistedState()
   const ws = persisted.wordStates
-  const charWords = wordDataset.filter((w) => getContentKind(w) === 'character')
-  const vocabWords = wordDataset.filter((w) => getContentKind(w) === 'vocabulary')
-  const grammarWords = wordDataset.filter((w) => getContentKind(w) === 'grammar')
+  const charWords = feedWordList.filter((w) => getContentKind(w) === 'character')
+  const vocabWords = feedWordList.filter((w) => getContentKind(w) === 'vocabulary')
+  const grammarWords = feedWordList.filter((w) => getContentKind(w) === 'grammar')
   const byKind = {
     character: bucketByProgress(charWords, ws),
     vocabulary: bucketByProgress(vocabWords, ws),

@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host --port 5173",
     "setup:env": "node scripts/setup-env-interactive.mjs",
+    "setup:env:blank": "node scripts/copy-env-example.mjs",
     "check:supabase-env": "node scripts/check-supabase-env.mjs",
     "videos:storage-keys": "node scripts/list-video-storage-keys.mjs",
     "test:storage-url": "node scripts/test-storage-signed-url.mjs",

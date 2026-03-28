@@ -1,6 +1,8 @@
 import { AnimatePresence } from 'framer-motion'
 import React, { useCallback, useEffect, useState } from 'react'
+import { fetchPublicCatalogCoverUrls } from '../lib/catalogCovers'
 import { activateCode, getActivatedDecks, type DeckInfo } from '../lib/deckService'
+import { ACTIVATED_DECKS_CHANGED_EVENT } from '../lib/deckWords'
 import DeckCatalogGrid from './DeckCatalogGrid'
 import DeckContentsPanel from './DeckContentsPanel'
 
@@ -10,26 +12,54 @@ export default function LibraryTab() {
   const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null)
   const [decks, setDecks] = useState<DeckInfo[]>([])
   const [openDeck, setOpenDeck] = useState<DeckInfo | null>(null)
+  const [catalogCoverByKey, setCatalogCoverByKey] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    getActivatedDecks().then(setDecks)
+    let cancelled = false
+    void fetchPublicCatalogCoverUrls().then((map) => {
+      if (!cancelled) setCatalogCoverByKey(map)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const sync = () => {
+      void getActivatedDecks().then((d) => {
+        if (!cancelled) setDecks(d)
+      })
+    }
+    sync()
+    window.addEventListener(ACTIVATED_DECKS_CHANGED_EVENT, sync)
+    return () => {
+      cancelled = true
+      window.removeEventListener(ACTIVATED_DECKS_CHANGED_EVENT, sync)
+    }
   }, [])
 
   const handleActivate = useCallback(async () => {
     if (!code.trim()) return
     setActivating(true)
     setMessage(null)
-    const result = await activateCode(code)
-    setActivating(false)
-
-    if (result.success && result.deck) {
-      setMessage({ text: `"${result.deck.name}" activated!`, ok: true })
-      setCode('')
-      setDecks((prev) =>
-        prev.some((d) => d.id === result.deck!.id) ? prev : [...prev, result.deck!],
-      )
-    } else {
-      setMessage({ text: result.error ?? 'Activation failed.', ok: false })
+    try {
+      const result = await activateCode(code)
+      if (result.success && result.deck) {
+        setMessage({ text: `"${result.deck.name}" activated!`, ok: true })
+        setCode('')
+        window.dispatchEvent(new Event(ACTIVATED_DECKS_CHANGED_EVENT))
+      } else {
+        setMessage({ text: result.error ?? 'Activation failed.', ok: false })
+      }
+    } catch (e) {
+      console.error('[Library] activateCode', e)
+      setMessage({
+        text: e instanceof Error ? e.message : 'Activation failed. Try again.',
+        ok: false,
+      })
+    } finally {
+      setActivating(false)
     }
   }, [code])
 
@@ -76,7 +106,11 @@ export default function LibraryTab() {
           After purchase, your activation code is sent to the email address you provide at checkout.
         </p>
 
-        <DeckCatalogGrid decks={decks} onSelectOwnedDeck={(d) => setOpenDeck(d)} />
+        <DeckCatalogGrid
+          decks={decks}
+          catalogCoverByKey={catalogCoverByKey}
+          onSelectOwnedDeck={(d) => setOpenDeck(d)}
+        />
       </div>
     </div>
   )

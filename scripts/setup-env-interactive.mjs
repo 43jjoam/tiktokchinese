@@ -52,10 +52,20 @@ const url = (await rl.question('\n  Paste ① Project URL here, then Enter: ')).
 const key = (await rl.question('  Paste ② anon public key here, then Enter: ')).trim()
 await rl.close()
 
-if (!url.startsWith('https://') || key.length < 80) {
+if (!url.startsWith('https://')) {
   console.error(`
-  Something looks wrong (URL should start with https://, key should be a long JWT).
-  Run  npm run setup:env  again and copy from Project Settings → API (anon public key only).
+  URL must start with https://
+  Copy "Project URL" from Supabase → Project Settings → API (or General).
+`)
+  process.exit(1)
+}
+if (key.length < 32) {
+  console.error(`
+  Key looks too short. Copy the full client / anon / public key (often one long line starting with eyJ).
+
+  Supabase dashboard:
+    Settings (gear) → API → use the key meant for the browser (anon / public / publishable).
+  Do NOT paste service_role or secret keys.
 `)
   process.exit(1)
 }

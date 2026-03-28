@@ -5,14 +5,17 @@ import {
   catalogAccentClass,
   catalogBarGradient,
   findOwnedDeck,
+  getCatalogPreviewCoverUrl,
 } from '../data/deckCatalog'
 
 type Props = {
   decks: DeckInfo[]
+  /** From Supabase `decks` — same covers as owned; shown dimmed when not purchased. */
+  catalogCoverByKey?: Record<string, string>
   onSelectOwnedDeck: (deck: DeckInfo) => void
 }
 
-export default function DeckCatalogGrid({ decks, onSelectOwnedDeck }: Props) {
+export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwnedDeck }: Props) {
   const builtin = BUILTIN_CHINESE_CHARACTERS_1
   const builtinBar = catalogBarGradient('emerald')
 
@@ -51,6 +54,8 @@ export default function DeckCatalogGrid({ decks, onSelectOwnedDeck }: Props) {
         const matched = findOwnedDeck(item, decks)
         const owned = matched !== undefined
         const bar = catalogBarGradient(item.accent)
+        const previewCover =
+          getCatalogPreviewCoverUrl(item) ?? catalogCoverByKey?.[item.key]
 
         const onActivate = () => {
           if (owned && matched) {
@@ -69,40 +74,51 @@ export default function DeckCatalogGrid({ decks, onSelectOwnedDeck }: Props) {
           >
             <div className="relative aspect-[3/4] w-full overflow-hidden">
               {owned && matched?.cover_image_url ? (
+                <img
+                  src={matched.cover_image_url}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : !owned ? (
                 <>
-                  <img
-                    src={matched.cover_image_url}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/45" />
+                  {previewCover ? (
+                    <>
+                      <img
+                        src={previewCover}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover brightness-[0.52] contrast-[0.82] saturate-[0.85]"
+                      />
+                      <div className="absolute inset-0 bg-black/32" />
+                    </>
+                  ) : (
+                    <div className={`absolute inset-0 bg-gradient-to-br ${bar} opacity-[0.55]`} />
+                  )}
+                  <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center p-3 text-center">
+                    <span className="text-2xl font-bold tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
+                      {item.title}
+                    </span>
+                    <span className="mt-1 text-[10px] font-medium leading-tight text-white/90 drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]">
+                      {item.subtitle}
+                    </span>
+                  </div>
                 </>
               ) : (
-                <div
-                  className={`absolute inset-0 bg-gradient-to-br ${
-                    owned ? bar : 'from-zinc-600 to-zinc-900'
-                  }`}
-                />
+                <>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${bar}`} />
+                  <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center p-3 text-center">
+                    <span className="text-xl font-bold leading-tight tracking-tight text-white drop-shadow">
+                      {matched?.name ?? item.title}
+                    </span>
+                  </div>
+                </>
               )}
-              <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center p-3 text-center">
-                <span
-                  className={`text-2xl font-bold tracking-tight drop-shadow ${owned ? 'text-white' : 'text-white/50'}`}
-                >
-                  {item.title}
-                </span>
-                <span
-                  className={`mt-1 text-[10px] font-medium leading-tight ${owned ? 'text-white/90' : 'text-white/35'}`}
-                >
-                  {item.subtitle}
-                </span>
-              </div>
             </div>
             <div className="px-3 py-2">
-              <div className={`text-xs font-semibold truncate ${owned ? 'text-white' : 'text-white/45'}`}>
-                {item.title}
+              <div className={`text-xs font-semibold truncate ${owned ? 'text-white' : 'text-white/90'}`}>
+                {owned ? (matched?.name ?? item.title) : item.title}
               </div>
-              <div className={`text-[10px] truncate ${owned ? 'text-white/60' : 'text-white/30'}`}>
-                {owned ? 'Purchased · tap for contents' : 'Not purchased · tap for product page'}
+              <div className={`text-[10px] truncate ${owned ? 'text-white/60' : 'text-white/55'}`}>
+                {owned ? 'Tap for contents' : 'Not purchased · tap for product page'}
               </div>
             </div>
           </button>
