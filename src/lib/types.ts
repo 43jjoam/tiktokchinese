@@ -2,6 +2,20 @@ export type Locale = 'en' | 'zh-TW' | 'th'
 
 export type WordId = string
 
+/** Compound / phrase using a single character (curated; align with CC-CEDICT / 教育部《重編國語辭典》等). */
+export type CharacterLexicalExample = {
+  zh: string
+  pinyin?: string
+  l1_meanings: Partial<Record<Locale, string>>
+}
+
+/** One sample sentence for multi-character vocab or grammar entries. */
+export type IllustrativeSentence = {
+  zh: string
+  pinyin?: string
+  l1_meanings: Partial<Record<Locale, string>>
+}
+
 export type WordMetadata = {
   word_id: WordId
   character: string
@@ -22,10 +36,22 @@ export type WordMetadata = {
   video_storage_bucket?: string
   base_complexity: number
   dependencies: WordId[]
-  /** Feed item kind for profile / analytics. Defaults to character when omitted. */
+  /**
+   * Profile: `grammar` is explicit. Otherwise vocabulary vs character is inferred from
+   * `character` string length (multi-glyph → vocabulary). Optional for overrides later.
+   */
   content_type?: 'character' | 'vocabulary' | 'grammar'
   /** Library catalog keys (e.g. hsk-2) that include this word; used when a purchased deck lists contents. */
   deck_catalog_keys?: string[]
+  /**
+   * Single-character cards: up to 3 compound examples in the tap-for-meaning panel.
+   * Curate from authoritative lexical sources (e.g. CC-CEDICT, MOE 國語辭典).
+   */
+  character_lexical_examples?: CharacterLexicalExample[]
+  /** Vocabulary / grammar cards: sample sentence + L1 glosses (same locales as `l1_meanings`). */
+  illustrative_sentence?: IllustrativeSentence
+  /** Shown under examples, e.g. "CC-CEDICT (CC BY-SA 4.0)". */
+  dictionary_attribution?: string
 }
 
 export type WordState = {

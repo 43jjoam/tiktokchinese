@@ -21,8 +21,25 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
+    character_lexical_examples: [
+      {
+        zh: '天气',
+        pinyin: 'tiānqì',
+        l1_meanings: { en: 'weather', 'zh-TW': '天氣', th: 'อากาศ' },
+      },
+      {
+        zh: '空气',
+        pinyin: 'kōngqì',
+        l1_meanings: { en: 'air', 'zh-TW': '空氣', th: 'อากาศ' },
+      },
+      {
+        zh: '生气',
+        pinyin: 'shēngqì',
+        l1_meanings: { en: 'to get angry; angry', 'zh-TW': '生氣', th: 'โกรธ' },
+      },
+    ],
+    dictionary_attribution: 'Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0).',
   },
   {
     word_id: "hsk1-appearance-or-type-118",
@@ -35,7 +52,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -49,7 +65,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -63,7 +78,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -77,7 +91,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -91,7 +104,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -105,7 +117,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -119,7 +130,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -133,7 +143,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -147,7 +156,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -161,7 +169,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -175,7 +182,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -189,7 +195,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -203,7 +208,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -217,7 +221,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -231,7 +234,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -245,7 +247,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -259,7 +260,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -273,7 +273,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -287,7 +286,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -301,7 +299,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -315,7 +312,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -329,7 +325,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -343,7 +338,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -357,7 +351,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -371,7 +364,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -385,7 +377,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -399,7 +390,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -413,7 +403,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -427,7 +416,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -441,7 +429,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -455,7 +442,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -469,7 +455,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -483,7 +468,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -497,7 +481,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -511,7 +494,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -525,7 +507,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -539,7 +520,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -553,7 +533,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -567,7 +546,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -581,7 +559,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -595,7 +572,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -609,7 +585,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -623,7 +598,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -637,7 +611,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -651,7 +624,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -665,7 +637,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -679,7 +650,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -693,7 +663,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -707,7 +676,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -721,7 +689,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -735,7 +702,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -749,7 +715,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -763,7 +728,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -777,7 +741,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -791,7 +754,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -805,7 +767,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -819,7 +780,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -833,7 +793,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -847,7 +806,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -861,7 +819,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -875,7 +832,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -889,7 +845,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -903,7 +858,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -917,7 +871,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -931,7 +884,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -945,7 +897,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -959,7 +910,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -973,7 +923,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -987,7 +936,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1001,7 +949,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1015,7 +962,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1029,7 +975,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1043,7 +988,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1057,7 +1001,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1071,7 +1014,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1085,7 +1027,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1099,7 +1040,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1113,7 +1053,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1127,7 +1066,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1141,7 +1079,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1155,7 +1092,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1169,7 +1105,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1183,7 +1118,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1197,7 +1131,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1211,7 +1144,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1225,7 +1157,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1239,7 +1170,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1253,7 +1183,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1267,7 +1196,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1281,7 +1209,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1295,7 +1222,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1309,7 +1235,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1323,7 +1248,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1337,7 +1261,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1351,7 +1274,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1365,7 +1287,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1379,7 +1300,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
   {
@@ -1393,7 +1313,6 @@ export const hsk1Words: WordMetadata[] = [
     video_storage_bucket: "HSK_1",
     base_complexity: 1.2,
     dependencies: [],
-    content_type: 'vocabulary',
     deck_catalog_keys: ['hsk-1'],
   },
 ]

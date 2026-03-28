@@ -16,7 +16,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-dad-01.mp4",
     "youtube_url": "https://youtube.com/shorts/G1gj2iFq1cQ?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "爸爸",
+        "pinyin": "bàba",
+        "l1_meanings": { "en": "dad; father (informal)", "zh-TW": "爸爸", "th": "พ่อ" }
+      },
+      {
+        "zh": "父母",
+        "pinyin": "fùmǔ",
+        "l1_meanings": { "en": "parents", "zh-TW": "父母", "th": "พ่อแม่" }
+      },
+      {
+        "zh": "爸妈",
+        "pinyin": "bàmā",
+        "l1_meanings": { "en": "mom and dad", "zh-TW": "爸媽", "th": "พ่อกับแม่" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-sendout-04",
@@ -32,7 +50,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-sendout-04.mp4",
     "youtube_url": "https://youtube.com/shorts/8AQx3XlKFo0?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "发现",
+        "pinyin": "fāxiàn",
+        "l1_meanings": { "en": "to discover; to find", "zh-TW": "發現", "th": "ค้นพบ" }
+      },
+      {
+        "zh": "发展",
+        "pinyin": "fāzhǎn",
+        "l1_meanings": { "en": "development; to develop", "zh-TW": "發展", "th": "พัฒนาการ" }
+      },
+      {
+        "zh": "发送",
+        "pinyin": "fāsòng",
+        "l1_meanings": { "en": "to send out", "zh-TW": "發送", "th": "ส่ง" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-fear-03",
@@ -48,7 +84,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-fear-03.mp4",
     "youtube_url": "https://youtube.com/shorts/AJiWAjCumf4?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "害怕",
+        "pinyin": "hàipà",
+        "l1_meanings": { "en": "to be afraid", "zh-TW": "害怕", "th": "กลัว" }
+      },
+      {
+        "zh": "恐怕",
+        "pinyin": "kǒngpà",
+        "l1_meanings": { "en": "I'm afraid that…; perhaps", "zh-TW": "恐怕", "th": "เกรงว่า" }
+      },
+      {
+        "zh": "怕人",
+        "pinyin": "pàrén",
+        "l1_meanings": { "en": "shy; timid (of a person)", "zh-TW": "怕人", "th": "ขี้อาย" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-hair-05",
@@ -64,7 +118,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-hair-05.mp4",
     "youtube_url": "https://youtube.com/shorts/_2LBJ29tuSo?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "头发",
+        "pinyin": "tóufa",
+        "l1_meanings": { "en": "hair (on the head)", "zh-TW": "頭髮", "th": "ผม" }
+      },
+      {
+        "zh": "理发",
+        "pinyin": "lǐfà",
+        "l1_meanings": { "en": "haircut", "zh-TW": "理髮", "th": "ตัดผม" }
+      },
+      {
+        "zh": "白发",
+        "pinyin": "báifà",
+        "l1_meanings": { "en": "white hair", "zh-TW": "白髮", "th": "ผมขาว" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-hitdrum-06",

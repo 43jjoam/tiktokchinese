@@ -2,6 +2,7 @@ import React from 'react'
 import { BUILTIN_CHINESE_CHARACTERS_1, type DeckInfo } from '../lib/deckService'
 import {
   DECK_CATALOG,
+  LOCKED_DECK_UNLOCK_HINT,
   catalogAccentClass,
   catalogBarGradient,
   findOwnedDeck,
@@ -93,12 +94,9 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
                   ) : (
                     <div className={`absolute inset-0 bg-gradient-to-br ${bar} opacity-[0.55]`} />
                   )}
-                  <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center p-3 text-center">
-                    <span className="text-2xl font-bold tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)]">
-                      {item.title}
-                    </span>
-                    <span className="mt-1 text-[10px] font-medium leading-tight text-white/90 drop-shadow-[0_1px_8px_rgba(0,0,0,0.8)]">
-                      {item.subtitle}
+                  <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-3 text-center">
+                    <span className="text-2xl font-bold leading-tight tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] sm:text-[1.65rem]">
+                      {item.lockOverlayTitle ?? item.title}
                     </span>
                   </div>
                 </>
@@ -114,11 +112,11 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
               )}
             </div>
             <div className="px-3 py-2">
-              <div className={`text-xs font-semibold truncate ${owned ? 'text-white' : 'text-white/90'}`}>
-                {owned ? (matched?.name ?? item.title) : item.title}
+              <div className={`text-xs font-semibold leading-tight ${owned ? 'truncate text-white' : 'text-white'}`}>
+                {owned ? (matched?.name ?? item.title) : (item.lockOverlayTitle ?? item.title)}
               </div>
-              <div className={`text-[10px] truncate ${owned ? 'text-white/60' : 'text-white/55'}`}>
-                {owned ? 'Tap for contents' : 'Not purchased · tap for product page'}
+              <div className={`mt-0.5 text-[10px] leading-snug ${owned ? 'truncate text-white/60' : 'text-white/55'}`}>
+                {owned ? 'Tap for contents' : LOCKED_DECK_UNLOCK_HINT}
               </div>
             </div>
           </button>

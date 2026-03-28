@@ -1,9 +1,15 @@
 import type { DeckInfo } from '../lib/deckService'
 
+/** Shown under locked deck art + footer; same for every unpurchased product deck. */
+export const LOCKED_DECK_UNLOCK_HINT =
+  'Tap to purchase or enter an activation code to unlock'
+
 export type CatalogDeck = {
   key: string
   title: string
   subtitle: string
+  /** Short line on locked card art (e.g. "HSK 1"); falls back to `title`. */
+  lockOverlayTitle?: string
   shopUrl: string
   /** Same image as `decks.cover_image_url` when owned — shown dimmed for unpurchased cards. */
   previewCoverUrl?: string
@@ -68,6 +74,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
   {
     key: 'hsk-1',
     title: 'HSK 1 Digital Flashcards',
+    lockOverlayTitle: 'HSK 1',
     subtitle: 'Unlock with your purchase code',
     shopUrl: product('hsk-1-digital-flashcards'),
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk1 || matchHskLevel(d.name, 1),

@@ -7,8 +7,20 @@ import { BUILTIN_CHINESE_CHARACTERS_1 } from './deckService'
 /** Dispatch after Library activation so Home / Profile refresh the merged word list. */
 export const ACTIVATED_DECKS_CHANGED_EVENT = 'tiktokchinese:activated-decks-changed'
 
+const PURCHASABLE_CATALOG_KEYS = new Set(DECK_CATALOG.map((c) => c.key))
+
+/** Words tagged for purchasable Library decks (e.g. hsk-1) must not appear in the free character feed. */
+function isTaggedForPurchasableDeck(w: WordMetadata): boolean {
+  const keys = w.deck_catalog_keys
+  if (!keys?.length) return false
+  return keys.some((k) => PURCHASABLE_CATALOG_KEYS.has(k))
+}
+
 function characterWords(): WordMetadata[] {
-  return wordDataset.filter((w) => !w.content_type || w.content_type === 'character')
+  return wordDataset.filter(
+    (w) =>
+      (!w.content_type || w.content_type === 'character') && !isTaggedForPurchasableDeck(w),
+  )
 }
 
 export function getWordsForDeck(deck: DeckInfo): WordMetadata[] {

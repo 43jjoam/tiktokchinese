@@ -86,11 +86,12 @@ export default function LibraryTab() {
             className="flex-1 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
           />
           <button
+            type="button"
             onClick={handleActivate}
-            disabled={activating || !code.trim()}
-            className="rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold disabled:opacity-40 active:scale-95 transition-all"
+            disabled={activating}
+            className="shrink-0 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-900/40 transition-colors hover:bg-indigo-500 active:scale-[0.98] active:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
           >
-            {activating ? '...' : 'Activate'}
+            {activating ? '…' : 'Activate'}
           </button>
         </div>
         {message && (

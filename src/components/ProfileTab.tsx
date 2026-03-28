@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { loadPersistedState } from '../lib/storage'
 import { getActivatedDecks } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
+import { getWordContentKind } from '../lib/wordContentKind'
 import type { WordMetadata } from '../lib/types'
 
 const NAME_KEY = 'tiktokchinese_display_name'
@@ -20,10 +21,6 @@ function getOrCreateName(): string {
     localStorage.setItem(NAME_KEY, name)
   }
   return name
-}
-
-function getContentKind(w: WordMetadata): ContentKind {
-  return w.content_type ?? 'character'
 }
 
 type Bucketed = {
@@ -266,9 +263,9 @@ export default function ProfileTab() {
 
   const persisted = loadPersistedState()
   const ws = persisted.wordStates
-  const charWords = feedWordList.filter((w) => getContentKind(w) === 'character')
-  const vocabWords = feedWordList.filter((w) => getContentKind(w) === 'vocabulary')
-  const grammarWords = feedWordList.filter((w) => getContentKind(w) === 'grammar')
+  const charWords = feedWordList.filter((w) => getWordContentKind(w) === 'character')
+  const vocabWords = feedWordList.filter((w) => getWordContentKind(w) === 'vocabulary')
+  const grammarWords = feedWordList.filter((w) => getWordContentKind(w) === 'grammar')
   const byKind = {
     character: bucketByProgress(charWords, ws),
     vocabulary: bucketByProgress(vocabWords, ws),

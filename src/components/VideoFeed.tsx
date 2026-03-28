@@ -22,6 +22,7 @@ import {
   getWordsForDeck,
 } from '../lib/deckWords'
 import { getSwipeEncouragementBundle, resolveSwipeEncouragementLang } from '../lib/swipeEncouragement'
+import { MeaningTapOverlayCard } from './MeaningTapOverlay'
 
 const LOOP_MS = 5000
 
@@ -1285,6 +1286,9 @@ export default function VideoFeed() {
   const allMeanings = currentWord.l1_meanings
 
   const [translatedMeaning, setTranslatedMeaning] = useState<string | null>(null)
+  const illustrativeEn = currentWord.illustrative_sentence?.l1_meanings?.en?.trim() ?? ''
+
+  const [illustrativeGlossTranslated, setIllustrativeGlossTranslated] = useState<string | null>(null)
 
   useEffect(() => {
     if (isNativelySupported) {
@@ -1301,6 +1305,30 @@ export default function VideoFeed() {
     })
     return () => { cancelled = true }
   }, [currentWord.word_id, rawLang, isNativelySupported, englishMeaning])
+
+  useEffect(() => {
+    if (isNativelySupported || !illustrativeEn) {
+      setIllustrativeGlossTranslated(null)
+      return
+    }
+    const cacheKey = `${rawLang}::ill::${illustrativeEn}`
+    const hit = translationCache[cacheKey]
+    if (hit) {
+      setIllustrativeGlossTranslated(hit)
+      return
+    }
+    let cancelled = false
+    setIllustrativeGlossTranslated(null)
+    void fetchTranslation(illustrativeEn, rawLang).then((t) => {
+      if (!cancelled && t) {
+        translationCache[cacheKey] = t
+        setIllustrativeGlossTranslated(t)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [currentWord.word_id, rawLang, isNativelySupported, illustrativeEn])
 
   const recordTap = (loopsElapsed: number) => {
     if (tapOccurredRef.current) return
@@ -1845,28 +1873,16 @@ export default function VideoFeed() {
             exit={{ opacity: 0, scale: 0.9 }}
             className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
           >
-            <div className="w-[min(85vw,360px)] rounded-2xl bg-black/65 px-6 py-5 text-center shadow-2xl backdrop-blur-md">
-              <div className="text-2xl font-bold">{currentWord.character}</div>
-              <div className="mt-1 text-sm text-white/70">{currentWord.pinyin}</div>
-              <div className="mt-3 h-px w-full bg-white/15" />
-
-              {isNativelySupported ? (
-                <div className="mt-3 text-base font-semibold">{staticMeaning}</div>
-              ) : (
-                <>
-                  {translatedMeaning && (
-                    <div className="mt-3 text-base font-semibold">
-                      <span className="text-white/50 text-xs mr-1.5">{userLangLabel}</span>
-                      {translatedMeaning}
-                    </div>
-                  )}
-                  <div className={translatedMeaning ? 'mt-2 text-sm text-white/80' : 'mt-3 text-base font-semibold'}>
-                    <span className="text-white/50 text-xs mr-1.5">EN</span>
-                    {englishMeaning}
-                  </div>
-                </>
-              )}
-            </div>
+            <MeaningTapOverlayCard
+              word={currentWord}
+              locale={locale}
+              isNativelySupported={isNativelySupported}
+              userLangLabel={userLangLabel}
+              staticMeaning={staticMeaning}
+              englishMeaning={englishMeaning}
+              translatedMeaning={translatedMeaning}
+              illustrativeGlossTranslated={illustrativeGlossTranslated}
+            />
           </motion.div>
         )}
       </AnimatePresence>
