@@ -152,7 +152,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-hitdrum-06.mp4",
     "youtube_url": "https://youtube.com/shorts/8EvUYc2PdRY?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "打球",
+        "pinyin": "dǎqiú",
+        "l1_meanings": { "en": "to play ball (sports)", "zh-TW": "打球", "th": "เล่นบอล" }
+      },
+      {
+        "zh": "打牌",
+        "pinyin": "dǎpái",
+        "l1_meanings": { "en": "to play cards", "zh-TW": "打牌", "th": "เล่นไพ่" }
+      },
+      {
+        "zh": "打人",
+        "pinyin": "dǎrén",
+        "l1_meanings": { "en": "to hit someone", "zh-TW": "打人", "th": "ตีคน" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-big-07",
@@ -168,7 +186,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-big-07.mp4",
     "youtube_url": "https://youtube.com/shorts/saSvRZCXvPs?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "大学",
+        "pinyin": "dàxué",
+        "l1_meanings": { "en": "university; college", "zh-TW": "大學", "th": "มหาวิทยาลัย" }
+      },
+      {
+        "zh": "大人",
+        "pinyin": "dàrén",
+        "l1_meanings": { "en": "adult; grown-up", "zh-TW": "大人", "th": "ผู้ใหญ่" }
+      },
+      {
+        "zh": "长大",
+        "pinyin": "zhǎngdà",
+        "l1_meanings": { "en": "to grow up", "zh-TW": "長大", "th": "โตขึ้น" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-horse-08",
@@ -184,7 +220,25 @@ export const words: WordMetadata[] = [
     "video_storage_path": "M-horse-08.mp4",
     "youtube_url": "https://youtube.com/shorts/EEM6IQdfhmc?feature=share",
     "base_complexity": 1.0,
-    "dependencies": []
+    "dependencies": [],
+    "character_lexical_examples": [
+      {
+        "zh": "马上",
+        "pinyin": "mǎshàng",
+        "l1_meanings": { "en": "right away; immediately", "zh-TW": "馬上", "th": "ทันที" }
+      },
+      {
+        "zh": "马路",
+        "pinyin": "mǎlù",
+        "l1_meanings": { "en": "road; street", "zh-TW": "馬路", "th": "ถนน" }
+      },
+      {
+        "zh": "马车",
+        "pinyin": "mǎchē",
+        "l1_meanings": { "en": "horse-drawn carriage", "zh-TW": "馬車", "th": "รถม้า" }
+      }
+    ],
+    "dictionary_attribution": "Compounds aligned with CC-CEDICT-style entries (CC BY-SA 4.0)."
   },
   {
     "word_id": "M-climb-09",

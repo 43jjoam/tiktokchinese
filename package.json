@@ -12,7 +12,8 @@
     "check:supabase-env": "node scripts/check-supabase-env.mjs",
     "videos:storage-keys": "node scripts/list-video-storage-keys.mjs",
     "test:storage-url": "node scripts/test-storage-signed-url.mjs",
-    "mascot:install": "node scripts/install-mascot-video.mjs"
+    "mascot:install": "node scripts/install-mascot-video.mjs",
+    "words:seed-sql": "node scripts/generate-words-seed.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

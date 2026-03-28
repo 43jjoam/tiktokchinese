@@ -25,7 +25,7 @@ export default function App() {
         }
         aria-hidden={activeTab !== 'home'}
       >
-        <VideoFeed />
+        <VideoFeed keyboardShortcutsActive={activeTab === 'home'} />
       </div>
 
       {activeTab === 'library' && <LibraryTab />}

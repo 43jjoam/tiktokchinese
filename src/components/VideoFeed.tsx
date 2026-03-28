@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSignals, SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
 import { classifyTapTiming, computeTapRateAdaptiveAlpha, loopsElapsedFromMs, updateWordState } from '../lib/memoryEngine'
@@ -10,7 +10,17 @@ import {
   type AppMeta,
 } from '../lib/storage'
 import { BUILTIN_CHINESE_CHARACTERS_1, getActivatedDecks, getSupabaseClient } from '../lib/deckService'
-import { getLikeStatus, toggleLike } from '../lib/likeService'
+import {
+  buildShareUrl,
+  engagementSetLike,
+  engagementSetSave,
+  engagementShareSuccess,
+  engagementShareTap,
+  fetchEngagementSnapshot,
+  getLocalLikedWordIds,
+  getLocalSavedWordIds,
+  recordLocalShare,
+} from '../lib/engagementService'
 import {
   createLessonVideoSignedUrl,
   peekCachedLessonVideoSignedUrl,
@@ -22,7 +32,11 @@ import {
   getWordsForDeck,
 } from '../lib/deckWords'
 import { getSwipeEncouragementBundle, resolveSwipeEncouragementLang } from '../lib/swipeEncouragement'
+import { resolveCharacterCompounds } from '../lib/characterCompounds'
+import { getWordContentKind } from '../lib/wordContentKind'
+import { extractYouTubeVideoId } from '../lib/youtubeUrl'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
+import { prefetchYouTubeIframeApi, YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
 
 const LOOP_MS = 5000
 
@@ -416,6 +430,17 @@ function SwipeTransitionEncouragement({
 }) {
   const wordGradientLeft = 'inline-block text-white'
   const wordGradientRight = 'inline-block text-white'
+  const preferReducedMotion = useReducedMotion()
+  const [isMdUp, setIsMdUp] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const sync = () => setIsMdUp(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  /** Full-screen mix-blend + confetti repaints the whole viewport on many GPUs — skip on laptop (md+) and reduced-motion. */
+  const heavyRightCelebration = preferReducedMotion !== true && !isMdUp
 
   if (dir === 'right') {
     return (
@@ -431,8 +456,8 @@ function SwipeTransitionEncouragement({
         <p className="sr-only">{text}</p>
         <SwipeEncouragementFrostedBackdrop />
         <SwipeEncouragementGlassAccents />
-        <PaperFlashBursts />
-        <RightSwipeConfettiBurst />
+        {heavyRightCelebration ? <PaperFlashBursts /> : null}
+        {heavyRightCelebration ? <RightSwipeConfettiBurst /> : null}
         <div className="relative z-10 flex flex-col items-center">
           <EncouragementWordCard text={text} wordGradient={wordGradientRight} />
         </div>
@@ -654,254 +679,12 @@ function SwipeHintArrowRight({ className }: { className?: string }) {
   )
 }
 
-function extractYouTubeId(url: string): string | null {
-  try {
-    const u = new URL(url)
-    if (u.pathname.startsWith('/shorts/')) return u.pathname.split('/shorts/')[1]?.split('/')[0] ?? null
-    const v = u.searchParams.get('v')
-    if (v) return v
-    const parts = u.pathname.split('/').filter(Boolean)
-    return parts.length ? parts[parts.length - 1] : null
-  } catch {
-    return null
-  }
+type VideoFeedProps = {
+  /** When false (e.g. another tab is visible), arrow keys do not advance the feed. */
+  keyboardShortcutsActive?: boolean
 }
 
-/* ── YouTube IFrame Player API loader ── */
-let ytApiLoaded = false
-const ytApiQueue: (() => void)[] = []
-
-function suggestedYoutubeQuality(): string {
-  if (typeof window === 'undefined') return 'medium'
-  try {
-    return window.matchMedia('(max-width: 480px)').matches ? 'small' : 'medium'
-  } catch {
-    return 'medium'
-  }
-}
-
-/** Single-short infinite loop (TikTok-style) — IFrame API + ENDED fallback. */
-function applyYoutubeLoop(player: any) {
-  try {
-    if (typeof player.setLoop === 'function') player.setLoop(true)
-  } catch {}
-  try {
-    if (suggestedYoutubeQuality() === 'small' && typeof player.setPlaybackQuality === 'function') {
-      player.setPlaybackQuality('small')
-    }
-  } catch {}
-}
-
-function ensureYouTubeAPI(): Promise<void> {
-  const YT = (window as any).YT
-  if (YT?.Player) {
-    ytApiLoaded = true
-    return Promise.resolve()
-  }
-  return new Promise((resolve) => {
-    ytApiQueue.push(resolve)
-    if (document.querySelector('script[src*="youtube.com/iframe_api"]')) return
-    const s = document.createElement('script')
-    s.src = 'https://www.youtube.com/iframe_api'
-    document.head.appendChild(s)
-    const prev = (window as any).onYouTubeIframeAPIReady
-    ;(window as any).onYouTubeIframeAPIReady = () => {
-      try {
-        prev?.()
-      } catch {}
-      ytApiLoaded = true
-      for (const cb of ytApiQueue) cb()
-      ytApiQueue.length = 0
-    }
-  })
-}
-
-function YouTubePlayer({
-  videoId,
-  onPlaying,
-}: {
-  videoId: string
-  onPlaying: () => void
-}) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const playerRef = useRef<any>(null)
-  const onPlayingRef = useRef(onPlaying)
-  onPlayingRef.current = onPlaying
-  const videoIdRef = useRef(videoId)
-  videoIdRef.current = videoId
-  const firedRef = useRef(false)
-
-  useEffect(
-    () => () => {
-      if (playerRef.current) {
-        try { playerRef.current.destroy() } catch {}
-        playerRef.current = null
-      }
-    },
-    [],
-  )
-
-  useEffect(() => {
-    let cancelled = false
-    let playingFallbackTimer: number | null = null
-    let endedPollId: number | null = null
-
-    const clearEndedPoll = () => {
-      if (endedPollId !== null) {
-        window.clearInterval(endedPollId)
-        endedPollId = null
-      }
-    }
-
-    const startEndedPoll = () => {
-      if (endedPollId !== null) return
-      endedPollId = window.setInterval(() => {
-        if (cancelled || !playerRef.current) return
-        try {
-          const YT = (window as any).YT
-          const p = playerRef.current
-          if (p.getPlayerState?.() === YT.PlayerState.ENDED) {
-            applyYoutubeLoop(p)
-            p.seekTo(0, true)
-            p.playVideo()
-          }
-        } catch {}
-      }, 700)
-    }
-
-    const clearFallback = () => {
-      if (playingFallbackTimer !== null) {
-        window.clearTimeout(playingFallbackTimer)
-        playingFallbackTimer = null
-      }
-    }
-
-    const styleIframe = () => {
-      const iframe = hostRef.current?.querySelector('iframe')
-      if (iframe) {
-        iframe.style.pointerEvents = 'none'
-        iframe.style.width = '100%'
-        iframe.style.height = '100%'
-        iframe.style.border = '0'
-      }
-    }
-
-    const firePlayingOnce = () => {
-      if (cancelled || firedRef.current) return
-      firedRef.current = true
-      clearFallback()
-      onPlayingRef.current()
-    }
-
-    const armFallback = () => {
-      clearFallback()
-      firedRef.current = false
-      playingFallbackTimer = window.setTimeout(() => firePlayingOnce(), 1500)
-    }
-
-    const matchesCurrentVideo = (player: any) => {
-      try {
-        const vid = player?.getVideoData?.()?.video_id
-        return !vid || vid === videoIdRef.current
-      } catch {
-        return true
-      }
-    }
-
-    ;(async () => {
-      await ensureYouTubeAPI()
-      if (cancelled || !hostRef.current) return
-
-      if (!playerRef.current) {
-        const holder = document.createElement('div')
-        hostRef.current.innerHTML = ''
-        hostRef.current.appendChild(holder)
-
-        const origin =
-          typeof window !== 'undefined' && window.location?.origin
-            ? window.location.origin
-            : undefined
-
-        playerRef.current = new (window as any).YT.Player(holder, {
-          videoId,
-          playerVars: {
-            autoplay: 1,
-            mute: 1,
-            controls: 0,
-            playsinline: 1,
-            modestbranding: 1,
-            rel: 0,
-            fs: 0,
-            iv_load_policy: 3,
-            // loop=1 requires playlist with the same id for a single Short to repeat like TikTok.
-            loop: 1,
-            playlist: videoId,
-            ...(origin ? { origin } : {}),
-          },
-          events: {
-            onReady: (e: any) => {
-              if (cancelled) return
-              try {
-                applyYoutubeLoop(e.target)
-                e.target.mute()
-                e.target.playVideo()
-              } catch {}
-              armFallback()
-              styleIframe()
-            },
-            onStateChange: (e: any) => {
-              if (cancelled) return
-              const YT = (window as any).YT
-              const st = e.data
-              // PRD: clip loops until the user swipes (TikTok-style). Only gate PLAYING on
-              // getVideoData — Shorts often mismatch ids after the first loop and would block ENDED.
-              if (st === YT.PlayerState.PLAYING && matchesCurrentVideo(e.target)) {
-                firePlayingOnce()
-              }
-              if (st === YT.PlayerState.ENDED) {
-                try {
-                  applyYoutubeLoop(e.target)
-                  e.target.seekTo(0, true)
-                  e.target.playVideo()
-                } catch {}
-              }
-            },
-            onError: () => {
-              if (!cancelled) firePlayingOnce()
-            },
-          },
-        })
-        styleIframe()
-        startEndedPoll()
-      } else {
-        armFallback()
-        try {
-          playerRef.current.loadVideoById({
-            videoId,
-            suggestedQuality: suggestedYoutubeQuality(),
-          })
-          applyYoutubeLoop(playerRef.current)
-          playerRef.current.mute()
-          playerRef.current.playVideo()
-        } catch {
-          firePlayingOnce()
-        }
-        styleIframe()
-        startEndedPoll()
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      clearFallback()
-      clearEndedPoll()
-    }
-  }, [videoId])
-
-  return <div ref={hostRef} className="h-full w-full" />
-}
-
-export default function VideoFeed() {
+export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedProps) {
   /** Chinese Characters 1 by default; + purchased decks (e.g. HSK 1) after activation. */
   const [words, setWords] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
 
@@ -922,7 +705,7 @@ export default function VideoFeed() {
   }, [])
 
   useEffect(() => {
-    void ensureYouTubeAPI()
+    void prefetchYouTubeIframeApi()
   }, [])
 
   const prefetchBootPath = useMemo(() => {
@@ -937,6 +720,7 @@ export default function VideoFeed() {
 
   const locale = useMemo(() => detectSupportedLocale(), [])
   const rawLang = useMemo(() => getRawLangCode(), [])
+  const swipeHintsReduceMotion = useReducedMotion()
   const encouragementUiLang = useMemo(() => resolveSwipeEncouragementLang(), [])
   const swipeEncouragementBundle = useMemo(
     () => getSwipeEncouragementBundle(encouragementUiLang),
@@ -980,12 +764,25 @@ export default function VideoFeed() {
     if (currentWordId) saveCurrentWordId(currentWordId)
   }, [currentWordId])
 
+  useEffect(() => {
+    if (!words.length) return
+    const params = new URLSearchParams(window.location.search)
+    const w = params.get('w')?.trim()
+    if (w && words.some((x) => x.word_id === w)) {
+      setCurrentWordId(w)
+    }
+    if (window.location.search) {
+      const path = window.location.pathname || '/'
+      window.history.replaceState({}, '', path + window.location.hash)
+    }
+  }, [words])
+
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
 
   const extractedYoutubeId = useMemo(() => {
     if (!currentWord.youtube_url) return null
-    return extractYouTubeId(currentWord.youtube_url)
+    return extractYouTubeVideoId(currentWord.youtube_url)
   }, [currentWord.youtube_url])
 
   /**
@@ -1078,14 +875,6 @@ export default function VideoFeed() {
     extractedYoutubeId,
   ])
 
-  const videoLikeKey = useMemo(
-    () =>
-      currentWord.youtube_url ||
-      currentWord.video_storage_path ||
-      currentWord.video_url,
-    [currentWord.youtube_url, currentWord.video_storage_path, currentWord.video_url],
-  )
-
   const qualityVideoId = useMemo(
     () =>
       currentWord.video_storage_path
@@ -1100,13 +889,12 @@ export default function VideoFeed() {
   const lastRenderMsRef = useRef(0)
 
   const gestureRef = useRef<HTMLDivElement>(null)
+  const feedRootRef = useRef<HTMLDivElement>(null)
 
   const touchStateRef = useRef<{
     startX: number
     startY: number
     startTime: number
-    longPressTimer: number | null
-    longPressFired: boolean
   } | null>(null)
 
   const [uiTick, setUiTick] = useState(0)
@@ -1128,7 +916,6 @@ export default function VideoFeed() {
     if (likeBurstTimerRef.current) window.clearTimeout(likeBurstTimerRef.current)
     likeBurstTimerRef.current = window.setTimeout(() => setLikeBurstVisible(false), 600)
   }, [])
-  const [longPressVisible, setLongPressVisible] = useState(false)
   const [showPrimerTapHint, setShowPrimerTapHint] = useState(false)
   /** After first tap-for-meaning on video 0, show swipe guidance (tap always comes first). */
   const [firstVideoSwipeRevealed, setFirstVideoSwipeRevealed] = useState(false)
@@ -1169,6 +956,12 @@ export default function VideoFeed() {
     tryCompleteSwipeEncouragement()
   }, [tryCompleteSwipeEncouragement])
 
+  const [liked, setLiked] = useState(false)
+  const [saved, setSaved] = useState(false)
+  /** Global like count from backend; never show a stale/local number as global (PRD). */
+  const [likeCount, setLikeCount] = useState<number | null>(null)
+  const [backendCountsOk, setBackendCountsOk] = useState(false)
+
   useEffect(() => {
     if (!swipeTransitionLine) return
     const id = window.setInterval(() => tryCompleteSwipeEncouragement(), 64)
@@ -1183,10 +976,12 @@ export default function VideoFeed() {
     return () => window.clearTimeout(t)
   }, [currentWord.word_id, ytId, needsSignedNativeUrl, markFeedPlayable])
 
-  const [liked, setLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
   const likedRef = useRef(false)
   likedRef.current = liked
+  const savedRef = useRef(false)
+  savedRef.current = saved
+  const backendCountsOkRef = useRef(false)
+  backendCountsOkRef.current = backendCountsOk
 
   const finalizedRef = useRef(false)
 
@@ -1196,7 +991,6 @@ export default function VideoFeed() {
     tapTimingRef.current = undefined
     tapLoopAtRef.current = 0
     setL1Visible(false)
-    setLongPressVisible(false)
     setShowPrimerTapHint(false)
     setFirstVideoSwipeRevealed(false)
     tapPrimerConsumedRef.current = false
@@ -1242,15 +1036,49 @@ export default function VideoFeed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWordId])
 
+  const refreshEngagement = useCallback(async (word?: WordMetadata) => {
+    const w = word ?? currentWordRef.current
+    const wid = w.word_id
+    const snap = await fetchEngagementSnapshot(w)
+    if (wid !== currentWordRef.current.word_id) return
+    setLiked(snap.liked)
+    setSaved(snap.saved)
+    setLikeCount(snap.likeCount)
+    setBackendCountsOk(snap.backendCountsOk)
+  }, [])
+
   useEffect(() => {
-    let cancelled = false
-    getLikeStatus(videoLikeKey).then((s) => {
-      if (cancelled) return
-      setLiked(s.liked)
-      setLikeCount(s.count)
-    })
-    return () => { cancelled = true }
-  }, [currentWord.word_id, videoLikeKey])
+    const wid = currentWordId
+    setLiked(getLocalLikedWordIds().includes(wid))
+    setSaved(getLocalSavedWordIds().includes(wid))
+    setLikeCount(null)
+    setBackendCountsOk(false)
+    void refreshEngagement(currentWordRef.current)
+  }, [currentWordId, refreshEngagement])
+
+  useEffect(() => {
+    const root = feedRootRef.current
+    if (!root) return
+    let pollId: number | null = null
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const vis = entries.some((e) => e.isIntersecting && e.intersectionRatio >= 0.2)
+        if (pollId !== null) {
+          window.clearInterval(pollId)
+          pollId = null
+        }
+        if (vis) {
+          pollId = window.setInterval(() => void refreshEngagement(), 30_000)
+        }
+      },
+      { threshold: [0, 0.2, 0.5] },
+    )
+    obs.observe(root)
+    return () => {
+      obs.disconnect()
+      if (pollId !== null) window.clearInterval(pollId)
+    }
+  }, [refreshEngagement])
 
   const chooseNextWordFromBuckets = (excludeWordId?: string) => {
     const roll = Math.random()
@@ -1449,17 +1277,51 @@ export default function VideoFeed() {
   doLikeRef.current = () => {
     if (likedRef.current) return
     setLiked(true)
-    setLikeCount((c) => c + 1)
-    toggleLike(videoLikeKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
+    if (backendCountsOkRef.current) {
+      setLikeCount((c) => (c != null ? c + 1 : c))
+    }
+    void engagementSetLike(currentWordRef.current, true).then(() => refreshEngagement())
   }
 
   const handleHeartToggle = useCallback(() => {
     const wasLiked = likedRef.current
-    setLiked(!wasLiked)
-    setLikeCount((c) => wasLiked ? Math.max(0, c - 1) : c + 1)
+    const next = !wasLiked
+    setLiked(next)
+    if (backendCountsOkRef.current) {
+      setLikeCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
+    }
     if (!wasLiked) triggerLikeBurst()
-    toggleLike(videoLikeKey).then((s) => { setLiked(s.liked); setLikeCount(s.count) })
-  }, [videoLikeKey, triggerLikeBurst])
+    void engagementSetLike(currentWordRef.current, next).then(() => refreshEngagement())
+  }, [triggerLikeBurst, refreshEngagement])
+
+  const handleSaveToggle = useCallback(() => {
+    const next = !savedRef.current
+    setSaved(next)
+    void engagementSetSave(currentWordRef.current, next).then(() => refreshEngagement())
+  }, [refreshEngagement])
+
+  const handleShareClick = useCallback(async () => {
+    const w = currentWordRef.current
+    recordLocalShare(w.word_id)
+    await engagementShareTap(w)
+    const url = buildShareUrl(w.word_id)
+    const title = `${w.character} (${w.pinyin})`
+    try {
+      if (typeof navigator.share === 'function') {
+        await navigator.share({ title, text: 'Chinese Flash', url })
+        await engagementShareSuccess(w, 'web_share')
+        return
+      }
+    } catch (e) {
+      if ((e as { name?: string })?.name === 'AbortError') return
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+      await engagementShareSuccess(w, 'copy')
+    } catch {
+      /* no share_success row */
+    }
+  }, [])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)
@@ -1491,6 +1353,32 @@ export default function VideoFeed() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!keyboardShortcutsActive) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return
+      if (e.repeat) return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = e.target
+      if (el instanceof HTMLElement && el.closest('input, textarea, select, [contenteditable="true"]')) {
+        return
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        e.stopPropagation()
+        finalizeSessionRef.current(e.key === 'ArrowLeft' ? 'left' : 'right')
+        return
+      }
+      if (e.code === 'Space') {
+        e.preventDefault()
+        const loopsElapsed = loopsElapsedFromMs(elapsedMsRef.current)
+        handleTapGesture(loopsElapsed)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [keyboardShortcutsActive, handleTapGesture])
+
   // Native touch event listeners registered with { passive: false } so preventDefault() works.
   // This is the critical fix: React registers touch handlers as passive, which silently ignores
   // preventDefault() and lets the browser perform native scroll/swipe gestures that steal input.
@@ -1508,40 +1396,16 @@ export default function VideoFeed() {
       const startY = t.clientY
       const startTime = Date.now()
 
-      const longPressTimer = window.setTimeout(() => {
-        const st = touchStateRef.current
-        if (!st) return
-        if (finalizedRef.current) return
-        // Only fire long press if finger hasn't moved much
-        st.longPressFired = true
-        const loopsElapsed = loopsElapsedFromMs(elapsedMsRef.current)
-        recordTap(loopsElapsed)
-        setLongPressVisible(true)
-        window.setTimeout(() => setLongPressVisible(false), 2500)
-      }, 550)
-
       touchStateRef.current = {
         startX,
         startY,
         startTime,
-        longPressTimer,
-        longPressFired: false,
       }
     }
 
     const onTouchMove = (e: TouchEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      const st = touchStateRef.current
-      if (!st || e.touches.length !== 1) return
-      const t = e.touches[0]
-      const dx = Math.abs(t.clientX - st.startX)
-      const dy = Math.abs(t.clientY - st.startY)
-      // If finger moved significantly, cancel long press
-      if ((dx > 15 || dy > 15) && st.longPressTimer) {
-        window.clearTimeout(st.longPressTimer)
-        st.longPressTimer = null
-      }
     }
 
     const onTouchEnd = (e: TouchEvent) => {
@@ -1550,9 +1414,6 @@ export default function VideoFeed() {
       const st = touchStateRef.current
       if (!st) return
       touchStateRef.current = null
-
-      if (st.longPressTimer) window.clearTimeout(st.longPressTimer)
-      if (st.longPressFired) return
 
       const touch = e.changedTouches[0]
       const dx = touch.clientX - st.startX
@@ -1598,27 +1459,7 @@ export default function VideoFeed() {
     const startY = e.clientY
     const startTime = Date.now()
 
-    const longPressTimer = window.setTimeout(() => {
-      if (finalizedRef.current) return
-      const loopsElapsed = loopsElapsedFromMs(elapsedMsRef.current)
-      recordTap(loopsElapsed)
-      setLongPressVisible(true)
-      window.setTimeout(() => setLongPressVisible(false), 2500)
-    }, 550)
-
-    ;(e.currentTarget as any).__ptrState = { startX, startY, startTime, longPressTimer }
-  }
-
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (e.pointerType === 'touch') return
-    const ps = (e.currentTarget as any).__ptrState
-    if (!ps) return
-    const dx = Math.abs(e.clientX - ps.startX)
-    const dy = Math.abs(e.clientY - ps.startY)
-    if ((dx > 15 || dy > 15) && ps.longPressTimer) {
-      window.clearTimeout(ps.longPressTimer)
-      ps.longPressTimer = null
-    }
+    ;(e.currentTarget as any).__ptrState = { startX, startY, startTime }
   }
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -1626,8 +1467,6 @@ export default function VideoFeed() {
     const ps = (e.currentTarget as any).__ptrState
     if (!ps) return
     ;(e.currentTarget as any).__ptrState = null
-
-    if (ps.longPressTimer) window.clearTimeout(ps.longPressTimer)
 
     const dx = e.clientX - ps.startX
     const dy = e.clientY - ps.startY
@@ -1648,20 +1487,28 @@ export default function VideoFeed() {
     }
   }
 
+  const displayedLikeCount =
+    backendCountsOk && likeCount !== null ? Math.max(likeCount, liked ? 1 : 0) : null
+
   return (
-    <div className="relative h-dvh w-full overflow-hidden bg-black">
+    <div ref={feedRootRef} className="relative h-dvh w-full overflow-hidden bg-black">
       <div
         className="absolute inset-0 z-0"
         style={{ backgroundImage: avatarGradient(currentWord.word_id) }}
       />
 
-      {/* Video background layer — visible (blurred) under encouragement overlay like before. */}
-      <div className="absolute inset-0 z-[1]" style={{ pointerEvents: 'none' }}>
+      {/* Video layer: full-bleed cover on phones; on md+ center and show full frame (letterbox) for native video; YouTube Shorts in a 9:16 max box. */}
+      <div
+        className="absolute inset-0 z-[1] bg-black md:flex md:items-center md:justify-center"
+        style={{ pointerEvents: 'none' }}
+      >
         {ytId ? (
-          <YouTubePlayer
-            videoId={ytId}
-            onPlaying={() => markFeedPlayable()}
-          />
+          <div className="h-full w-full min-h-0 min-w-0 md:mx-auto md:h-[min(100dvh,calc(100vw*16/9))] md:w-[min(100vw,calc(100dvh*9/16))]">
+            <YouTubeEmbedPlayer
+              videoId={ytId}
+              onPlaying={() => markFeedPlayable()}
+            />
+          </div>
         ) : needsSignedNativeUrl ? (
           nativePlaybackSrc ? (
             <video
@@ -1672,7 +1519,7 @@ export default function VideoFeed() {
               loop
               playsInline
               preload="auto"
-              className="h-full w-full object-cover"
+              className="h-full w-full min-h-0 object-cover md:h-auto md:max-h-[100dvh] md:w-auto md:max-w-[100vw] md:object-contain"
               style={{ pointerEvents: 'none' }}
               onLoadedData={() => markFeedPlayable()}
               onCanPlay={() => markFeedPlayable()}
@@ -1685,7 +1532,7 @@ export default function VideoFeed() {
                     console.warn('[VideoFeed] Video error — switching to video_url:', fb)
                     return fb
                   }
-                  const yid = w.youtube_url ? extractYouTubeId(w.youtube_url) : null
+                  const yid = w.youtube_url ? extractYouTubeVideoId(w.youtube_url) : null
                   if (yid) {
                     queueMicrotask(() => setYoutubeFallback(true))
                   } else {
@@ -1712,7 +1559,7 @@ export default function VideoFeed() {
             loop
             playsInline
             preload="auto"
-            className="h-full w-full object-cover"
+            className="h-full w-full min-h-0 object-cover md:h-auto md:max-h-[100dvh] md:w-auto md:max-w-[100vw] md:object-contain"
             style={{ pointerEvents: 'none' }}
             onLoadedData={() => markFeedPlayable()}
             onCanPlay={() => markFeedPlayable()}
@@ -1746,10 +1593,9 @@ export default function VideoFeed() {
         className="absolute inset-0 z-[5] flex items-center justify-center"
         style={{ touchAction: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         role="application"
-        aria-label="Character feed. Swipe right if you know the word; swipe left if it is too hard or not for you. Tap for meaning. Long-press for breakdown."
+        aria-label="Character feed. Arrow keys: Right if you know the word, Left if too hard or not for you. Space for meaning (same as tap)."
       >
         {/* Center via flex on full-screen layer — framer `y` on same node as translate-x-50% was killing horizontal center */}
         <AnimatePresence>
@@ -1794,46 +1640,30 @@ export default function VideoFeed() {
           )}
         </AnimatePresence>
 
-        {/* Long-press breakdown overlay (2.5s) */}
-        <AnimatePresence>
-          {longPressVisible && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur"
-            >
-              <motion.div
-                initial={{ scale: 0.97, y: 6 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.97, y: 6 }}
-                className="w-[min(520px,92vw)] rounded-2xl bg-white/10 p-5"
-              >
-                <div className="text-sm font-semibold opacity-90">Pinyin breakdown</div>
-                <div className="mt-2 text-2xl font-bold">{currentWord.pinyin}</div>
-                <div className="mt-3 text-sm opacity-85">
-                  Radical details are demo-only in this MVP.
-                </div>
-                <div className="mt-5 text-xs opacity-70">
-                  Swipe right = you know it. Swipe left = too hard or not interested. Tap for meaning.
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
       </div>
 
-      {/* Swipe guidance — plain text + arrows (no frosted cards). Video 0: only after tap-for-meaning. */}
+      {/* Swipe guidance — edge-aligned like TikTok; subtle pulse so copy stays noticeable. Video 0: only after tap-for-meaning. */}
       {videoReady &&
         sessionVideoIndex < 3 &&
         (sessionVideoIndex > 0 || firstVideoSwipeRevealed) && (
         <div
-          className="pointer-events-none absolute inset-0 z-[6]"
+          className="pointer-events-none absolute inset-0 z-[12]"
           aria-hidden
         >
-          <div className="absolute left-2 top-[36%] -translate-y-1/2 sm:left-4 sm:top-[38%]">
-            <div className="flex max-w-[7rem] flex-col items-center gap-2 text-center">
+          <div className="absolute left-2 top-[48%] -translate-y-1/2 sm:left-4 sm:top-[50%]">
+            <motion.div
+              className="flex max-w-[7rem] flex-col items-center gap-2 text-center"
+              animate={
+                swipeHintsReduceMotion
+                  ? { opacity: 1, scale: 1 }
+                  : { opacity: [0.78, 1, 0.78], scale: [1, 1.06, 1] }
+              }
+              transition={
+                swipeHintsReduceMotion
+                  ? { duration: 0 }
+                  : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }
+              }
+            >
               <SwipeHintArrowLeft />
               <span
                 className="text-xs font-semibold leading-tight text-white"
@@ -1844,10 +1674,22 @@ export default function VideoFeed() {
               >
                 Too hard / skip
               </span>
-            </div>
+            </motion.div>
           </div>
-          <div className="absolute right-2 top-[36%] -translate-y-1/2 sm:right-4 sm:top-[38%] pr-1">
-            <div className="flex max-w-[7rem] flex-col items-center gap-2 text-center">
+          <div className="absolute right-2 top-[48%] -translate-y-1/2 sm:right-4 sm:top-[50%]">
+            <motion.div
+              className="flex max-w-[7rem] flex-col items-center gap-2 text-center"
+              animate={
+                swipeHintsReduceMotion
+                  ? { opacity: 1, scale: 1 }
+                  : { opacity: [0.78, 1, 0.78], scale: [1, 1.06, 1] }
+              }
+              transition={
+                swipeHintsReduceMotion
+                  ? { duration: 0 }
+                  : { duration: 2.4, repeat: Infinity, ease: 'easeInOut', delay: 0.35 }
+              }
+            >
               <SwipeHintArrowRight />
               <span
                 className="text-xs font-semibold leading-tight text-white"
@@ -1858,20 +1700,21 @@ export default function VideoFeed() {
               >
                 Know it
               </span>
-            </div>
+            </motion.div>
           </div>
         </div>
       )}
 
-      {/* L1 meaning overlay — absolutely centered within the h-dvh root container */}
+      {/* L1 meaning — full-width sheet slides down from top; bottom rail stays clear */}
       <AnimatePresence>
         {l1Visible && (
           <motion.div
             key={l1LockKey}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="absolute inset-0 z-40 flex items-center justify-center pointer-events-none"
+            initial={{ y: '-100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '-100%' }}
+            transition={{ type: 'tween', duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+            className="pointer-events-none absolute inset-x-0 top-0 z-40 px-0 pt-[calc(1rem+env(safe-area-inset-top,0px))]"
           >
             <MeaningTapOverlayCard
               word={currentWord}
@@ -1882,6 +1725,11 @@ export default function VideoFeed() {
               englishMeaning={englishMeaning}
               translatedMeaning={translatedMeaning}
               illustrativeGlossTranslated={illustrativeGlossTranslated}
+              compoundResult={
+                getWordContentKind(currentWord) === 'character'
+                  ? resolveCharacterCompounds(currentWord)
+                  : undefined
+              }
             />
           </motion.div>
         )}
@@ -1908,9 +1756,16 @@ export default function VideoFeed() {
         )}
       </AnimatePresence>
 
-      {/* TikTok-style right sidebar — raised above bottom nav */}
-      <div className="absolute right-3 z-10 flex flex-col items-center" style={{ bottom: 'calc(28% + 56px)' }}>
+      {/* TikTok-style right sidebar — only after video is playable so counts match what users see */}
+      {videoReady ? (
+      <div
+        className="absolute right-3 z-10 flex flex-col items-center gap-5"
+        style={{
+          bottom: 'calc(56px + env(safe-area-inset-bottom, 0px) + 10px)',
+        }}
+      >
         <button
+          type="button"
           onClick={handleHeartToggle}
           className="flex flex-col items-center gap-1 active:scale-110 transition-transform"
           aria-label={liked ? 'Unlike' : 'Like'}
@@ -1921,7 +1776,7 @@ export default function VideoFeed() {
             animate={{ scale: 1 }}
             transition={{ type: 'spring', stiffness: 500, damping: 15 }}
           >
-            <svg viewBox="0 0 24 24" width="36" height="36" className="drop-shadow-lg">
+            <svg viewBox="0 0 24 24" width="36" height="36" className="drop-shadow-lg" aria-hidden>
               <path
                 d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"
                 fill={liked ? '#ff2d55' : 'rgba(255,255,255,0.15)'}
@@ -1932,11 +1787,49 @@ export default function VideoFeed() {
               />
             </svg>
           </motion.div>
-          <span className="text-xs font-semibold text-white/90 drop-shadow">
-            {likeCount}
-          </span>
+          {displayedLikeCount != null && displayedLikeCount > 0 ? (
+            <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
+              {displayedLikeCount}
+            </span>
+          ) : null}
+        </button>
+        <button
+          type="button"
+          onClick={handleSaveToggle}
+          className="flex flex-col items-center gap-1 active:scale-110 transition-transform"
+          aria-label={saved ? 'Remove save' : 'Save'}
+        >
+          <svg viewBox="0 0 24 24" width="34" height="34" className="drop-shadow-lg" aria-hidden>
+            <path
+              d="M6 4h12a2 2 0 0 1 2 2v14l-8-4-8 4V6a2 2 0 0 1 2-2z"
+              fill={saved ? 'rgba(250,204,21,0.95)' : 'rgba(255,255,255,0.12)'}
+              stroke={saved ? '#facc15' : 'rgba(255,255,255,0.9)'}
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="text-[10px] font-semibold text-white/90 drop-shadow">Save</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleShareClick()}
+          className="flex flex-col items-center gap-1 active:scale-110 transition-transform"
+          aria-label="Share word"
+        >
+          <svg viewBox="0 0 24 24" width="34" height="34" className="drop-shadow-lg" aria-hidden>
+            <path
+              d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13"
+              fill="none"
+              stroke="rgba(255,255,255,0.92)"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="text-[10px] font-semibold text-white/90 drop-shadow">Share</span>
         </button>
       </div>
+      ) : null}
 
     </div>
   )

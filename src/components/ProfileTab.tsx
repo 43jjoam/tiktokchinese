@@ -1,10 +1,19 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { loadPersistedState } from '../lib/storage'
 import { getActivatedDecks } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
 import { getWordContentKind } from '../lib/wordContentKind'
 import type { WordMetadata } from '../lib/types'
+import {
+  ENGAGEMENT_LOCAL_CHANGED_EVENT,
+  getLocalLikedWordIds,
+  getLocalReceivedWordIds,
+  getLocalSavedWordIds,
+  getLocalSharedWordIds,
+} from '../lib/engagementService'
+import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
+import { EngagementWordPlayer } from './EngagementWordPlayer'
 
 const NAME_KEY = 'tiktokchinese_display_name'
 
@@ -12,6 +21,27 @@ type Category = 'mastered' | 'inProgress' | 'new'
 type ContentKind = 'character' | 'vocabulary' | 'grammar'
 
 type ActiveList = { kind: ContentKind; category: Category }
+
+type EngageTab = 'shared' | 'received' | 'saved' | 'liked'
+
+const ENGAGE_TAB_ORDER: EngageTab[] = ['shared', 'received', 'saved', 'liked']
+
+const ENGAGE_TAB_LABEL: Record<EngageTab, string> = {
+  shared: 'Shared',
+  received: 'Received',
+  saved: 'Saved',
+  liked: 'Liked',
+}
+
+const ENGAGE_EMPTY: Record<EngageTab, string> = {
+  shared: 'Nothing shared yet — tap Share on a card in the feed.',
+  received: 'Nothing here yet — clips others share with you will appear when available.',
+  saved: 'Nothing saved yet — tap Save on a card in the feed.',
+  liked: 'No likes yet — tap the heart on a card in the feed.',
+}
+
+const ACTIVE_TAB = 'text-white'
+const INACTIVE_TAB = 'text-white/45'
 
 function getOrCreateName(): string {
   let name = localStorage.getItem(NAME_KEY)
@@ -21,6 +51,11 @@ function getOrCreateName(): string {
     localStorage.setItem(NAME_KEY, name)
   }
   return name
+}
+
+function resolveWordsByIds(ids: string[], feed: WordMetadata[]): WordMetadata[] {
+  const byId = new Map(feed.map((w) => [w.word_id, w]))
+  return ids.map((id) => byId.get(id)).filter((w): w is WordMetadata => Boolean(w))
 }
 
 type Bucketed = {
@@ -120,11 +155,13 @@ function WordListView({
   category,
   words,
   onBack,
+  onPickWord,
 }: {
   scopeKind: ContentKind
   category: Category
   words: WordMetadata[]
   onBack: () => void
+  onPickWord: (w: WordMetadata) => void
 }) {
   const meta = categoryMeta[category]
   const scope = scopeTitle[scopeKind]
@@ -134,7 +171,7 @@ function WordListView({
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'tween', duration: 0.25 }}
-      className="absolute inset-0 z-10 flex h-dvh flex-col bg-black"
+      className="absolute inset-0 z-[48] flex h-dvh flex-col bg-black"
     >
       <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/10 bg-black/80 px-5 py-3 backdrop-blur-xl">
         <button
@@ -158,16 +195,18 @@ function WordListView({
         ) : (
           <div className="space-y-2">
             {words.map((w) => (
-              <div
+              <button
                 key={w.word_id}
-                className="flex items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3"
+                type="button"
+                onClick={() => onPickWord(w)}
+                className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors active:bg-white/10"
               >
                 <div className="w-12 shrink-0 text-center text-2xl font-bold">{w.character}</div>
                 <div className="min-w-0">
                   <div className="text-sm text-white/60">{w.pinyin}</div>
                   <div className="truncate text-sm">{w.l1_meanings.en ?? ''}</div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -193,16 +232,22 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
+      aria-label={`${label}, ${value} items`}
       className="rounded-xl border border-white/10 bg-white/5 px-3 py-4 text-center transition-transform active:scale-95"
     >
       <div className={`text-xl font-bold ${color}`}>{value}</div>
-      <div className="mt-1 text-[10px] uppercase tracking-wider text-white/50">
-        {label}
-        {tag && (
-          <span className="ml-1 rounded bg-indigo-500/20 px-1 py-0.5 text-indigo-300">new</span>
-        )}
-      </div>
-      <div className="mt-1.5 text-[9px] text-white/30">View list</div>
+      {tag ? (
+        <div className="mt-2 flex justify-center">
+          <span className="rounded-lg bg-indigo-500/35 px-3 py-1.5 text-sm font-bold tracking-wide text-indigo-100">
+            New
+          </span>
+        </div>
+      ) : (
+        <>
+          <div className="mt-1 text-[10px] uppercase tracking-wider text-white/50">{label}</div>
+          <div className="mt-1.5 text-[9px] text-white/30">View list</div>
+        </>
+      )}
     </button>
   )
 }
@@ -240,10 +285,108 @@ function CategoryStrip({
   )
 }
 
+function IconShared({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />
+    </svg>
+  )
+}
+
+function IconInbox({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+      <polyline points="22 6 12 13 2 6" />
+    </svg>
+  )
+}
+
+function IconSaved({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M6 4h12a2 2 0 0 1 2 2v14l-8-4-8 4V6a2 2 0 0 1 2-2z" />
+    </svg>
+  )
+}
+
+function IconLiked({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  )
+}
+
+const TAB_ICONS: Record<EngageTab, React.FC<{ className?: string }>> = {
+  shared: IconShared,
+  received: IconInbox,
+  saved: IconSaved,
+  liked: IconLiked,
+}
+
+/** Bottom nav uses 24×24 SVGs; profile engagement row stays a notch smaller. */
+const ENGAGE_ICON_PX = 'h-5 w-5'
+
+function EngageTabBar({ active, onChange }: { active: EngageTab; onChange: (t: EngageTab) => void }) {
+  return (
+    <div className="flex w-full border-b border-white/10">
+      {ENGAGE_TAB_ORDER.map((tab) => {
+        const Icon = TAB_ICONS[tab]
+        const isOn = active === tab
+        return (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => onChange(tab)}
+            aria-pressed={isOn}
+            aria-label={ENGAGE_TAB_LABEL[tab]}
+            className={`flex flex-1 flex-col items-center justify-center py-2.5 transition-colors ${
+              isOn ? ACTIVE_TAB : INACTIVE_TAB
+            }`}
+          >
+            <Icon className={ENGAGE_ICON_PX} />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** TikTok-style vertical thumb: 9:16 inside caller’s box. */
+function ProfileThumbFill({ word, className }: { word: WordMetadata; className?: string }) {
+  const src = useMemo(() => youtubePosterUrlForWord(word), [word])
+  const [bad, setBad] = useState(false)
+  const showImg = Boolean(src && !bad)
+
+  return (
+    <div className={`relative overflow-hidden bg-zinc-900 ${className ?? ''}`}>
+      {showImg ? (
+        <img
+          src={src!}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => setBad(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-indigo-600/45 to-purple-900/55">
+          <span className="text-center text-lg font-bold leading-tight text-white sm:text-xl">{word.character}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ProfileTab() {
   const displayName = useMemo(() => getOrCreateName(), [])
+  const [engageTab, setEngageTab] = useState<EngageTab>('shared')
+  const [statsSheetOpen, setStatsSheetOpen] = useState(false)
   const [activeList, setActiveList] = useState<ActiveList | null>(null)
+  const [listFocusWord, setListFocusWord] = useState<WordMetadata | null>(null)
+  const [engageFocusWord, setEngageFocusWord] = useState<WordMetadata | null>(null)
   const [feedWordList, setFeedWordList] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
+  const [engagementRev, setEngagementRev] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -261,6 +404,12 @@ export default function ProfileTab() {
     }
   }, [])
 
+  useEffect(() => {
+    const bump = () => setEngagementRev((n) => n + 1)
+    window.addEventListener(ENGAGEMENT_LOCAL_CHANGED_EVENT, bump)
+    return () => window.removeEventListener(ENGAGEMENT_LOCAL_CHANGED_EVENT, bump)
+  }, [])
+
   const persisted = loadPersistedState()
   const ws = persisted.wordStates
   const charWords = feedWordList.filter((w) => getWordContentKind(w) === 'character')
@@ -273,87 +422,222 @@ export default function ProfileTab() {
   }
 
   const char = byKind.character
-  const charProgress = char.stats.total > 0 ? char.stats.mastered / char.stats.total : 0
-  const charPct = Math.round(charProgress * 100)
+  const totalMasteredAll =
+    byKind.character.stats.mastered +
+    byKind.vocabulary.stats.mastered +
+    byKind.grammar.stats.mastered
+  const totalWordsAll =
+    byKind.character.stats.total + byKind.vocabulary.stats.total + byKind.grammar.stats.total
+  const overallProgress = totalWordsAll > 0 ? totalMasteredAll / totalWordsAll : 0
+  const overallPct = Math.round(overallProgress * 100)
 
   const listWords =
     activeList === null ? [] : byKind[activeList.kind].wordsByCategory[activeList.category]
 
+  const savedWords = useMemo(
+    () => resolveWordsByIds(getLocalSavedWordIds(), feedWordList),
+    [feedWordList, engagementRev],
+  )
+  const likedWords = useMemo(
+    () => resolveWordsByIds(getLocalLikedWordIds(), feedWordList),
+    [feedWordList, engagementRev],
+  )
+  const sharedWords = useMemo(
+    () => resolveWordsByIds(getLocalSharedWordIds(), feedWordList),
+    [feedWordList, engagementRev],
+  )
+  const receivedWords = useMemo(
+    () => resolveWordsByIds(getLocalReceivedWordIds(), feedWordList),
+    [feedWordList, engagementRev],
+  )
+
+  const currentEngageWords = useMemo(() => {
+    switch (engageTab) {
+      case 'shared':
+        return sharedWords
+      case 'received':
+        return receivedWords
+      case 'saved':
+        return savedWords
+      case 'liked':
+        return likedWords
+      default:
+        return sharedWords
+    }
+  }, [engageTab, sharedWords, receivedWords, savedWords, likedWords])
+
+  const openCategory = (kind: ContentKind, category: Category) => {
+    setListFocusWord(null)
+    setStatsSheetOpen(false)
+    setActiveList({ kind, category })
+  }
+
+  const sheetTransition = { type: 'tween' as const, duration: 0.32, ease: [0.32, 0.72, 0, 1] as const }
+
+  const engageSwipeStartRef = useRef<{ x: number; y: number } | null>(null)
+
+  const onEngageAreaTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return
+    const t = e.touches[0]
+    engageSwipeStartRef.current = { x: t.clientX, y: t.clientY }
+  }, [])
+
+  const onEngageAreaTouchCancel = useCallback(() => {
+    engageSwipeStartRef.current = null
+  }, [])
+
+  const onEngageAreaTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      const start = engageSwipeStartRef.current
+      engageSwipeStartRef.current = null
+      if (!start || e.changedTouches.length !== 1) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - start.x
+      const dy = t.clientY - start.y
+      const absDx = Math.abs(dx)
+      const absDy = Math.abs(dy)
+      const minTravel = 52
+      if (absDx < minTravel || absDx < absDy * 1.15) return
+
+      const idx = ENGAGE_TAB_ORDER.indexOf(engageTab)
+      if (dx < 0 && idx < ENGAGE_TAB_ORDER.length - 1) {
+        setEngageTab(ENGAGE_TAB_ORDER[idx + 1])
+      } else if (dx > 0 && idx > 0) {
+        setEngageTab(ENGAGE_TAB_ORDER[idx - 1])
+      }
+    },
+    [engageTab],
+  )
+
   return (
-    <div className="relative z-10 h-dvh overflow-hidden bg-black">
-      <div className="h-full overflow-y-auto px-5 pb-20 pt-4">
-        <div className="flex flex-col items-center pt-6">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-3xl font-bold shadow-lg">
+    <div className="relative z-10 flex h-dvh flex-col overflow-hidden bg-black">
+      <header className="shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <button
+          type="button"
+          onClick={() => setStatsSheetOpen(true)}
+          className="flex w-full flex-col items-center rounded-2xl py-2 active:bg-white/5"
+          aria-label="Open learning progress"
+        >
+          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-3xl font-bold shadow-lg ring-2 ring-white/10">
             {displayName.charAt(0).toUpperCase()}
           </div>
-          <h1 className="mt-3 text-lg font-bold">{displayName}</h1>
-          <p className="text-xs text-white/50">Local profile</p>
-        </div>
+          <h1 className="mt-2.5 text-lg font-bold text-white">{displayName}</h1>
+        </button>
 
-        {/* Characters */}
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">Characters</h2>
-          <div className="mt-4 flex flex-col items-center">
-            <div className="relative">
-              <ProgressRing progress={charProgress} />
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-2xl font-bold">{charPct}%</span>
-                <span className="text-[10px] text-white/50">mastered</span>
+        <EngageTabBar active={engageTab} onChange={setEngageTab} />
+      </header>
+
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-2 pb-[max(5rem,calc(4.5rem+env(safe-area-inset-bottom,0px)))] pt-2"
+        onTouchStart={onEngageAreaTouchStart}
+        onTouchEnd={onEngageAreaTouchEnd}
+        onTouchCancel={onEngageAreaTouchCancel}
+      >
+        {currentEngageWords.length === 0 ? (
+          <p className="mt-10 px-3 text-center text-sm leading-relaxed text-white/40">
+            {ENGAGE_EMPTY[engageTab]}
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
+            {currentEngageWords.map((w) => (
+              <button
+                key={w.word_id}
+                type="button"
+                onClick={() => setEngageFocusWord(w)}
+                className="aspect-[9/16] w-full overflow-hidden rounded-md bg-zinc-900 active:opacity-90"
+              >
+                <ProfileThumbFill word={w} className="h-full w-full" />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {statsSheetOpen ? (
+          <motion.div
+            key="stats-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-[40] bg-black/65"
+            onClick={() => setStatsSheetOpen(false)}
+            aria-hidden
+          />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {statsSheetOpen ? (
+          <motion.div
+            key="stats-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-stats-title"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={sheetTransition}
+            className="fixed inset-x-0 bottom-0 z-[41] flex max-h-[68vh] flex-col rounded-t-3xl border border-white/10 border-b-0 bg-zinc-950 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
+            style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 flex-col items-center pt-2 pb-1">
+              <div className="h-1 w-10 rounded-full bg-white/20" />
+              <div className="mt-3 flex w-full items-center justify-between px-5">
+                <h2 id="profile-stats-title" className="text-base font-bold text-white">
+                  Learning progress
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setStatsSheetOpen(false)}
+                  className="rounded-full px-3 py-1.5 text-sm font-medium text-white/60 transition-colors active:bg-white/10 active:text-white"
+                >
+                  Done
+                </button>
               </div>
             </div>
-          </div>
-          <CategoryStrip
-            bucket={char}
-            onPick={(category) => setActiveList({ kind: 'character', category })}
-          />
-          <p className="mt-2 text-center text-xs text-white/40">{char.stats.total} characters</p>
-        </div>
 
-        {/* Vocabularies */}
-        <div className="mt-10">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">Vocabularies</h2>
-          <CategoryStrip
-            bucket={byKind.vocabulary}
-            onPick={(category) => setActiveList({ kind: 'vocabulary', category })}
-          />
-          <p className="mt-2 text-center text-xs text-white/40">
-            {byKind.vocabulary.stats.total} vocabulary items
-          </p>
-        </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
+              <div className="flex flex-col items-center pt-2">
+                <div className="relative">
+                  <ProgressRing progress={overallProgress} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-2xl font-bold">{overallPct}%</span>
+                    <span className="text-[10px] text-white/50">mastered</span>
+                  </div>
+                </div>
+              </div>
 
-        {/* Grammar */}
-        <div className="mt-10">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">Grammar</h2>
-          <CategoryStrip
-            bucket={byKind.grammar}
-            onPick={(category) => setActiveList({ kind: 'grammar', category })}
-          />
-          <p className="mt-2 text-center text-xs text-white/40">
-            {byKind.grammar.stats.total} grammar items
-          </p>
-        </div>
+              <div className="mt-8">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/55">Characters</h3>
+                <CategoryStrip bucket={char} onPick={(c) => openCategory('character', c)} />
+                <p className="mt-2 text-center text-xs text-white/35">{char.stats.total} characters</p>
+              </div>
 
-        <div className="mt-8 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">How swipes work</h2>
-          <ul className="mt-2 space-y-2 text-sm text-white/80">
-            <li>
-              <span className="font-medium text-green-300/90">Know it</span>
-              <span className="text-white/55"> — swipe </span>
-              <span className="text-white/90">right</span>
-              <span className="text-white/55">. The app treats that as “I know this word.”</span>
-            </li>
-            <li>
-              <span className="font-medium text-orange-300/90">Not now</span>
-              <span className="text-white/55"> — swipe </span>
-              <span className="text-white/90">left</span>
-              <span className="text-white/55">
-                {' '}
-                if it feels too hard, you are not interested, or you want to skip for now.
-              </span>
-            </li>
-          </ul>
-        </div>
-      </div>
+              <div className="mt-8">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/55">Vocabularies</h3>
+                <CategoryStrip
+                  bucket={byKind.vocabulary}
+                  onPick={(c) => openCategory('vocabulary', c)}
+                />
+                <p className="mt-2 text-center text-xs text-white/35">
+                  {byKind.vocabulary.stats.total} vocabulary items
+                </p>
+              </div>
+
+              <div className="mt-8">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-white/55">Grammar</h3>
+                <CategoryStrip bucket={byKind.grammar} onPick={(c) => openCategory('grammar', c)} />
+                <p className="mt-2 text-center text-xs text-white/35">
+                  {byKind.grammar.stats.total} grammar items
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <AnimatePresence>
         {activeList && (
@@ -362,7 +646,31 @@ export default function ProfileTab() {
             scopeKind={activeList.kind}
             category={activeList.category}
             words={listWords}
-            onBack={() => setActiveList(null)}
+            onBack={() => {
+              setListFocusWord(null)
+              setActiveList(null)
+            }}
+            onPickWord={(w) => setListFocusWord(w)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {engageFocusWord && (
+          <EngagementWordPlayer
+            key={engageFocusWord.word_id}
+            word={engageFocusWord}
+            onBack={() => setEngageFocusWord(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {listFocusWord && (
+          <EngagementWordPlayer
+            key={`list-${listFocusWord.word_id}`}
+            word={listFocusWord}
+            onBack={() => setListFocusWord(null)}
           />
         )}
       </AnimatePresence>
