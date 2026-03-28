@@ -29,6 +29,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       // Listen on LAN so you can open http://<your-mac-ip>:5173 on a phone (same Wi‑Fi).
+      // Note: Web Share API (navigator.share) is usually unavailable on http://<LAN-ip> — use HTTPS or localhost to test it.
       host: true,
     },
   }

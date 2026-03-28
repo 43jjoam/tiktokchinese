@@ -11,15 +11,12 @@ import {
 } from '../lib/storage'
 import { BUILTIN_CHINESE_CHARACTERS_1, getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import {
-  buildShareUrl,
   engagementSetLike,
   engagementSetSave,
-  engagementShareSuccess,
-  engagementShareTap,
   fetchEngagementSnapshot,
   getLocalLikedWordIds,
   getLocalSavedWordIds,
-  recordLocalShare,
+  tryNativeShareWordFromUserGesture,
 } from '../lib/engagementService'
 import {
   createLessonVideoSignedUrl,
@@ -36,6 +33,7 @@ import { resolveCharacterCompounds } from '../lib/characterCompounds'
 import { getWordContentKind } from '../lib/wordContentKind'
 import { extractYouTubeVideoId } from '../lib/youtubeUrl'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
+import { ShareWordSheet } from './ShareWordSheet'
 import { prefetchYouTubeIframeApi, YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
 
 const LOOP_MS = 5000
@@ -921,6 +919,11 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const [firstVideoSwipeRevealed, setFirstVideoSwipeRevealed] = useState(false)
   const tapPrimerConsumedRef = useRef(false)
   const [videoReady, setVideoReady] = useState(false)
+  const [shareSheetOpen, setShareSheetOpen] = useState(false)
+
+  useEffect(() => {
+    setShareSheetOpen(false)
+  }, [currentWord.word_id])
 
   const lastLeftEncIdxRef = useRef<number | null>(null)
   const lastRightEncIdxRef = useRef<number | null>(null)
@@ -1299,29 +1302,6 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     setSaved(next)
     void engagementSetSave(currentWordRef.current, next).then(() => refreshEngagement())
   }, [refreshEngagement])
-
-  const handleShareClick = useCallback(async () => {
-    const w = currentWordRef.current
-    recordLocalShare(w.word_id)
-    await engagementShareTap(w)
-    const url = buildShareUrl(w.word_id)
-    const title = `${w.character} (${w.pinyin})`
-    try {
-      if (typeof navigator.share === 'function') {
-        await navigator.share({ title, text: 'Chinese Flash', url })
-        await engagementShareSuccess(w, 'web_share')
-        return
-      }
-    } catch (e) {
-      if ((e as { name?: string })?.name === 'AbortError') return
-    }
-    try {
-      await navigator.clipboard.writeText(url)
-      await engagementShareSuccess(w, 'copy')
-    } catch {
-      /* no share_success row */
-    }
-  }, [])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)
@@ -1812,7 +1792,12 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         </button>
         <button
           type="button"
-          onClick={() => void handleShareClick()}
+          onClick={() => {
+            const started = tryNativeShareWordFromUserGesture(currentWord, {
+              onFallback: () => setShareSheetOpen(true),
+            })
+            if (!started) setShareSheetOpen(true)
+          }}
           className="flex flex-col items-center gap-1 active:scale-110 transition-transform"
           aria-label="Share word"
         >
@@ -1831,6 +1816,11 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       </div>
       ) : null}
 
+      <ShareWordSheet
+        open={shareSheetOpen}
+        word={shareSheetOpen ? currentWord : null}
+        onClose={() => setShareSheetOpen(false)}
+      />
     </div>
   )
 }

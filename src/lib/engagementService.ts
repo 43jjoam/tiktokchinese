@@ -253,9 +253,20 @@ export async function engagementShareTap(word: WordMetadata): Promise<void> {
   })
 }
 
+/** Logged on `share_success.payload.method` (stored as string in DB). */
+export type ShareSuccessMethod =
+  | 'web_share'
+  | 'copy'
+  | 'facebook'
+  | 'whatsapp'
+  | 'sms'
+  | 'email'
+  | 'instagram'
+  | 'instagram_direct'
+
 export async function engagementShareSuccess(
   word: WordMetadata,
-  method: 'web_share' | 'copy',
+  method: ShareSuccessMethod,
 ): Promise<void> {
   const dh = await getDeviceHashForEngagement()
   await invokeRecordEngagement({
@@ -271,4 +282,64 @@ export function buildShareUrl(wordId: string): string {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const path = typeof window !== 'undefined' ? window.location.pathname || '/' : '/'
   return `${origin}${path}?w=${encodeURIComponent(wordId)}`
+}
+
+/** Body text for challenge shares (Web Share, SMS, etc.). */
+export function buildChallengeShareText(word: WordMetadata, url: string): string {
+  return `I'm gifting you a Chinese character on Chinese Flash, can you guess the meaning of it?\n\n${word.character} (${word.pinyin})\n${url}`
+}
+
+export function isNavigatorShareSupported(): boolean {
+  return typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+}
+
+/**
+ * Web Share only exists in a [secure context](https://developer.mozilla.org/en-US/docs/Web/Security/Secure_Contexts):
+ * `https://`, `http://localhost`, `http://127.0.0.1`, etc.
+ * `http://192.168.x.x` (LAN IP) is **not** secure → `navigator.share` is usually missing → our custom sheet opens instead.
+ */
+function devLogIfWebShareMissingDueToInsecureContext(): void {
+  if (!import.meta.env.DEV) return
+  if (typeof window === 'undefined') return
+  if (window.isSecureContext) return
+  if (isNavigatorShareSupported()) return
+  console.info(
+    '[Chinese Flash] Web Share is off: this URL is not a secure context (e.g. http://<LAN-ip>). ' +
+      'Use https:// (tunnel/mkcert) or http://localhost to get the system share sheet.',
+  )
+}
+
+export type NativeShareWordCallbacks = {
+  onShared?: () => void
+  /** Called when share is impossible or fails (not user dismiss). Open custom share UI. */
+  onFallback: () => void
+}
+
+/**
+ * Opens the OS share sheet (iOS/Android). Call directly from a click handler — do not await before this.
+ */
+export function tryNativeShareWordFromUserGesture(word: WordMetadata, callbacks: NativeShareWordCallbacks): boolean {
+  if (!isNavigatorShareSupported()) {
+    devLogIfWebShareMissingDueToInsecureContext()
+    return false
+  }
+  const url = buildShareUrl(word.word_id)
+  const text = buildChallengeShareText(word, url)
+  void navigator
+    .share({
+      title: 'Chinese Flash',
+      text,
+      url,
+    })
+    .then(async () => {
+      recordLocalShare(word.word_id)
+      await engagementShareTap(word)
+      await engagementShareSuccess(word, 'web_share')
+      callbacks.onShared?.()
+    })
+    .catch((e: unknown) => {
+      if ((e as { name?: string })?.name === 'AbortError') return
+      callbacks.onFallback()
+    })
+  return true
 }

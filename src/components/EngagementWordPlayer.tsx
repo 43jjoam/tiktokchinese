@@ -3,15 +3,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { WordMetadata } from '../lib/types'
 import { getSupabaseClient } from '../lib/deckService'
 import {
-  buildShareUrl,
   engagementSetLike,
   engagementSetSave,
-  engagementShareSuccess,
-  engagementShareTap,
   fetchEngagementSnapshot,
   getLocalLikedWordIds,
   getLocalSavedWordIds,
-  recordLocalShare,
+  tryNativeShareWordFromUserGesture,
 } from '../lib/engagementService'
 import {
   createLessonVideoSignedUrl,
@@ -22,6 +19,7 @@ import { getWordContentKind } from '../lib/wordContentKind'
 import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
 import { extractYouTubeVideoId } from '../lib/youtubeUrl'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
+import { ShareWordSheet } from './ShareWordSheet'
 import { YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
 
 type SupportedLocale = 'en' | 'zh-TW' | 'th'
@@ -108,6 +106,7 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
   wordRef.current = word
 
   const [engageVideoReady, setEngageVideoReady] = useState(false)
+  const [shareSheetOpen, setShareSheetOpen] = useState(false)
 
   const locale = useMemo(() => detectSupportedLocale(), [])
   const rawLang = useMemo(() => getRawLangCode(), [])
@@ -251,6 +250,10 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
   }, [])
 
   useEffect(() => {
+    setShareSheetOpen(false)
+  }, [word.word_id])
+
+  useEffect(() => {
     const wid = word.word_id
     setLiked(getLocalLikedWordIds().includes(wid))
     setSaved(getLocalSavedWordIds().includes(wid))
@@ -309,29 +312,6 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
     setSaved(next)
     void engagementSetSave(wordRef.current, next).then(() => refreshEngagement())
   }, [refreshEngagement])
-
-  const handleShareClick = useCallback(async () => {
-    const w = wordRef.current
-    recordLocalShare(w.word_id)
-    await engagementShareTap(w)
-    const url = buildShareUrl(w.word_id)
-    const title = `${w.character} (${w.pinyin})`
-    try {
-      if (typeof navigator.share === 'function') {
-        await navigator.share({ title, text: 'Chinese Flash', url })
-        await engagementShareSuccess(w, 'web_share')
-        return
-      }
-    } catch (e) {
-      if ((e as { name?: string })?.name === 'AbortError') return
-    }
-    try {
-      await navigator.clipboard.writeText(url)
-      await engagementShareSuccess(w, 'copy')
-    } catch {
-      /* */
-    }
-  }, [])
 
   const handleTapGesture = useCallback(() => {
     const now = Date.now()
@@ -691,7 +671,12 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
         </button>
         <button
           type="button"
-          onClick={() => void handleShareClick()}
+          onClick={() => {
+            const started = tryNativeShareWordFromUserGesture(word, {
+              onFallback: () => setShareSheetOpen(true),
+            })
+            if (!started) setShareSheetOpen(true)
+          }}
           className="pointer-events-auto flex flex-col items-center gap-1 active:scale-110 transition-transform"
           aria-label="Share word"
         >
@@ -709,6 +694,12 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
         </button>
       </div>
       ) : null}
+
+      <ShareWordSheet
+        open={shareSheetOpen}
+        word={shareSheetOpen ? word : null}
+        onClose={() => setShareSheetOpen(false)}
+      />
     </motion.div>
   )
 }
