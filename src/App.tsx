@@ -1,11 +1,17 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import BottomNav, { type TabId } from './components/BottomNav'
 import VideoFeed from './components/VideoFeed'
 import LibraryTab from './components/LibraryTab'
 import ProfileTab from './components/ProfileTab'
 
+const APP_DOC_TITLE = 'Chinese Flash — make learning Chinese easy and fun'
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>('home')
+
+  useEffect(() => {
+    document.title = APP_DOC_TITLE
+  }, [])
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-black text-white">
