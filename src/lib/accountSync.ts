@@ -218,11 +218,22 @@ export async function sendMagicLink(
   })
   if (error) {
     const raw = error.message || String(error)
-    console.warn('[sendMagicLink] Supabase Auth error:', raw, error)
+    const status =
+      error && typeof error === 'object' && 'status' in error && typeof (error as { status?: unknown }).status === 'number'
+        ? (error as { status: number }).status
+        : undefined
+    const code =
+      error && typeof error === 'object' && 'code' in error && typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : undefined
+    const rawMessage = [raw, status != null ? `HTTP ${status}` : null, code ? `code: ${code}` : null]
+      .filter(Boolean)
+      .join(' · ')
+    console.warn('[sendMagicLink] Supabase Auth error:', rawMessage, error)
     return {
       ok: false,
       message: userFacingOtpEmailError(raw),
-      rawMessage: raw,
+      rawMessage,
     }
   }
   return { ok: true }
