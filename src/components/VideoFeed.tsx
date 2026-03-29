@@ -1743,7 +1743,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           }}
           className="pointer-events-auto fixed right-3 top-[max(0.6rem,env(safe-area-inset-top))] z-[58] rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 shadow-[0_4px_20px_rgba(0,0,0,0.35)] ring-1 ring-black/10 active:scale-[0.98] active:opacity-95"
         >
-          Save progress
+          Sign in
         </button>
       ) : null}
 
