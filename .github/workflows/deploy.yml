@@ -28,6 +28,15 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      - name: Verify Supabase build secrets are non-empty
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ]; then echo "::error::VITE_SUPABASE_URL is empty — add it under Repo Settings → Secrets → Actions"; exit 1; fi
+          if [ -z "$VITE_SUPABASE_ANON_KEY" ]; then echo "::error::VITE_SUPABASE_ANON_KEY is empty — add it under Repo Settings → Secrets → Actions"; exit 1; fi
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+
       - run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

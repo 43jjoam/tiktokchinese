@@ -32,6 +32,7 @@ export function SaveProgressModal({
   const [email, setEmail] = useState(initialEmail)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorDetail, setErrorDetail] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export function SaveProgressModal({
       setEmail(initialEmail)
       setBusy(false)
       setError(null)
+      setErrorDetail(null)
       setSent(false)
     } else {
       setEmail(initialEmail)
@@ -53,11 +55,13 @@ export function SaveProgressModal({
 
   const submit = useCallback(async () => {
     setError(null)
+    setErrorDetail(null)
     setBusy(true)
     const r = await sendMagicLink(email)
     setBusy(false)
     if (!r.ok) {
       setError(r.message)
+      setErrorDetail(r.rawMessage ?? null)
       return
     }
     onMagicLinkSent()
@@ -67,6 +71,7 @@ export function SaveProgressModal({
   const goBackToEmail = useCallback(() => {
     setSent(false)
     setError(null)
+    setErrorDetail(null)
     setEmail('')
   }, [])
 
@@ -150,7 +155,20 @@ export function SaveProgressModal({
                     placeholder="you@example.com"
                     className="mt-1.5 w-full rounded-xl border border-white/15 bg-black/40 px-3 py-3 text-[16px] text-white outline-none ring-0 placeholder:text-white/35 focus:border-white/35"
                   />
-                  {error ? <p className="mt-2 text-center text-xs font-medium text-rose-300">{error}</p> : null}
+                  {error ? (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-center text-xs font-medium text-rose-300">{error}</p>
+                      {errorDetail ? (
+                        <p className="break-words text-center font-mono text-[10px] leading-snug text-rose-200/70">
+                          {errorDetail}
+                        </p>
+                      ) : null}
+                      <p className="text-center text-[10px] leading-snug text-white/35">
+                        Also check the browser console (F12) for a line starting with{' '}
+                        <span className="text-white/50">[sendMagicLink]</span>.
+                      </p>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     disabled={busy}

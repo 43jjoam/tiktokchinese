@@ -180,14 +180,27 @@ function userFacingOtpEmailError(raw: string): string {
  * URLs that are not allow-listed — use your canonical site URL.
  */
 function getMagicLinkRedirectUrl(): string | undefined {
+  const withTrailingSlash = (base: string, pathname: string) => {
+    const p = pathname === '' || pathname === '/' ? '/' : pathname.endsWith('/') ? pathname : `${pathname}/`
+    return `${base.replace(/\/+$/, '')}${p}`
+  }
   const fromEnv = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim()
-  if (fromEnv) return fromEnv
+  if (fromEnv) {
+    try {
+      const u = new URL(fromEnv)
+      return withTrailingSlash(u.origin, u.pathname)
+    } catch {
+      return fromEnv.endsWith('/') ? fromEnv : `${fromEnv}/`
+    }
+  }
   if (typeof window === 'undefined') return undefined
   /* Root only: avoids redirect_to mismatches when the opened path is not in Supabase Redirect URLs. */
-  return `${window.location.origin}/`
+  return withTrailingSlash(window.location.origin, '/')
 }
 
-export async function sendMagicLink(email: string): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function sendMagicLink(
+  email: string,
+): Promise<{ ok: true } | { ok: false; message: string; rawMessage?: string }> {
   const supabase = getSupabaseClient()
   if (!supabase) {
     return { ok: false, message: 'App is not connected to the cloud yet.' }
@@ -204,10 +217,13 @@ export async function sendMagicLink(email: string): Promise<{ ok: true } | { ok:
     },
   })
   if (error) {
-    if (import.meta.env.DEV) {
-      console.warn('[sendMagicLink] Supabase Auth error (raw):', error.message, error)
+    const raw = error.message || String(error)
+    console.warn('[sendMagicLink] Supabase Auth error:', raw, error)
+    return {
+      ok: false,
+      message: userFacingOtpEmailError(raw),
+      rawMessage: raw,
     }
-    return { ok: false, message: userFacingOtpEmailError(error.message || '') }
   }
   return { ok: true }
 }
