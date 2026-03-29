@@ -14,7 +14,8 @@
     "test:storage-url": "node scripts/test-storage-signed-url.mjs",
     "mascot:install": "node scripts/install-mascot-video.mjs",
     "words:seed-sql": "node scripts/generate-words-seed.mjs",
-    "words:metadata-seed-sql": "tsx scripts/generate-word-metadata-seed.ts"
+    "words:metadata-seed-sql": "tsx scripts/generate-word-metadata-seed.ts",
+    "configure:supabase-auth-smtp": "node scripts/configure-supabase-auth-smtp-resend.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
