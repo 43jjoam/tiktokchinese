@@ -12,6 +12,9 @@ import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState } from '../lib/storage'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
 import { getWordContentKind } from '../lib/wordContentKind'
+import { resolvePosTag } from '../lib/inferPosTag'
+import { POS_TAGS, type PosTag } from '../lib/posTag'
+import { montessoriHexForPosTag } from '../lib/posTagMontessori'
 import type { WordMetadata } from '../lib/types'
 import {
   ENGAGEMENT_LOCAL_CHANGED_EVENT,
@@ -22,6 +25,7 @@ import {
 } from '../lib/engagementService'
 import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
 import { EngagementWordPlayer } from './EngagementWordPlayer'
+import { GrammarColorsMontessoriPage } from './GrammarColorsMontessoriPage'
 
 const NAME_KEY = 'tiktokchinese_display_name'
 
@@ -208,6 +212,11 @@ function WordListView({
                 type="button"
                 onClick={() => onPickWord(w)}
                 className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors active:bg-white/10"
+                style={{
+                  borderLeftWidth: 3,
+                  borderLeftStyle: 'solid',
+                  borderLeftColor: montessoriHexForPosTag(resolvePosTag(w)),
+                }}
               >
                 <div className="w-12 shrink-0 text-center text-2xl font-bold">{w.character}</div>
                 <div className="min-w-0">
@@ -390,6 +399,7 @@ export default function ProfileTab() {
   const displayName = useMemo(() => getOrCreateName(), [])
   const [engageTab, setEngageTab] = useState<EngageTab>('shared')
   const [statsSheetOpen, setStatsSheetOpen] = useState(false)
+  const [montessoriGrammarOpen, setMontessoriGrammarOpen] = useState(false)
   const [activeList, setActiveList] = useState<ActiveList | null>(null)
   const [listFocusWord, setListFocusWord] = useState<WordMetadata | null>(null)
   const [engageFocusWord, setEngageFocusWord] = useState<WordMetadata | null>(null)
@@ -481,6 +491,20 @@ export default function ProfileTab() {
     byKind.character.stats.total + byKind.vocabulary.stats.total + byKind.grammar.stats.total
   const overallProgress = totalWordsAll > 0 ? totalMasteredAll / totalWordsAll : 0
   const overallPct = Math.round(overallProgress * 100)
+
+  const achievedWordsByPosTag = useMemo((): Record<PosTag, WordMetadata[]> => {
+    const buckets = {} as Record<PosTag, WordMetadata[]>
+    for (const t of POS_TAGS) buckets[t] = []
+    for (const w of feedWordList) {
+      const st = ws[w.word_id]
+      if (!st || st.sessionsSeen === 0) continue
+      buckets[resolvePosTag(w)].push(w)
+    }
+    for (const t of POS_TAGS) {
+      buckets[t].sort((a, b) => a.character.localeCompare(b.character, 'zh-Hans-CN'))
+    }
+    return buckets
+  }, [feedWordList, ws, storageRev])
 
   const listWords =
     activeList === null ? [] : byKind[activeList.kind].wordsByCategory[activeList.category]
@@ -621,12 +645,7 @@ export default function ProfileTab() {
               </button>
             </div>
           </div>
-        ) : supabaseConfigured ? (
-          <p className="text-sm leading-relaxed text-white/55">
-            Not signed in. Use <span className="font-semibold text-white/80">Sign in</span> on the learning tab (email
-            magic link) to keep progress across devices.
-          </p>
-        ) : (
+        ) : supabaseConfigured ? null : (
           <p className="text-sm text-white/50">Cloud backup is not configured in this build.</p>
         )}
 
@@ -708,7 +727,7 @@ export default function ProfileTab() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={sheetTransition}
-            className="fixed inset-x-0 bottom-0 z-[41] flex max-h-[68vh] flex-col rounded-t-3xl border border-white/10 border-b-0 bg-zinc-950 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
+            className="fixed inset-x-0 bottom-0 z-[41] flex max-h-[85vh] flex-col rounded-t-3xl border border-white/10 border-b-0 bg-zinc-950 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
             style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -728,8 +747,51 @@ export default function ProfileTab() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
-              <div className="flex flex-col items-center pt-2">
+            {/* Outside scroll: avoids flex/overflow bugs where this row never appears on some viewports */}
+            <div className="shrink-0 px-5 pb-3">
+              <button
+                type="button"
+                onClick={() => setMontessoriGrammarOpen(true)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-violet-500/35 bg-violet-500/10 px-4 py-3 text-left transition-colors active:bg-violet-500/20"
+                aria-label="Word types in Chinese. Opens list and tiles."
+              >
+                <div
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/25"
+                  aria-hidden
+                >
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden>
+                    <circle cx="8" cy="10" r="3.5" fill="#a855f7" fillOpacity="0.9" />
+                    <circle cx="15" cy="8" r="3" fill="#22c55e" fillOpacity="0.85" />
+                    <circle cx="14" cy="15" r="2.8" fill="#ef4444" fillOpacity="0.85" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-violet-200/80">
+                    Word types
+                  </div>
+                  <div className="mt-0.5 text-sm font-semibold text-white">Nouns, verbs &amp; more in Chinese</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-white/50">
+                    Short meanings + colored tiles — tap here
+                  </div>
+                </div>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="shrink-0 text-violet-300/70"
+                  aria-hidden
+                >
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+                <div className="flex flex-col items-center pt-2">
                 <div className="relative">
                   <ProgressRing progress={overallProgress} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -737,9 +799,9 @@ export default function ProfileTab() {
                     <span className="text-[10px] text-white/50">mastered</span>
                   </div>
                 </div>
-              </div>
+                </div>
 
-              <div className="mt-8">
+                <div className="mt-8">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-white/55">Characters</h3>
                 <CategoryStrip bucket={char} onPick={(c) => openCategory('character', c)} />
                 <p className="mt-2 text-center text-xs text-white/35">{char.stats.total} characters</p>
@@ -762,9 +824,20 @@ export default function ProfileTab() {
                 <p className="mt-2 text-center text-xs text-white/35">
                   {byKind.grammar.stats.total} grammar items
                 </p>
+                </div>
               </div>
             </div>
           </motion.div>
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {montessoriGrammarOpen ? (
+          <GrammarColorsMontessoriPage
+            key="montessori-grammar"
+            achievedWordsByPosTag={achievedWordsByPosTag}
+            onBack={() => setMontessoriGrammarOpen(false)}
+          />
         ) : null}
       </AnimatePresence>
 
@@ -790,6 +863,8 @@ export default function ProfileTab() {
             key={engageFocusWord.word_id}
             word={engageFocusWord}
             onBack={() => setEngageFocusWord(null)}
+            respectAnonymousSwipeCap={supabaseConfigured}
+            isSignedIn={Boolean(authEmail)}
           />
         )}
       </AnimatePresence>
@@ -800,6 +875,8 @@ export default function ProfileTab() {
             key={`list-${listFocusWord.word_id}`}
             word={listFocusWord}
             onBack={() => setListFocusWord(null)}
+            respectAnonymousSwipeCap={supabaseConfigured}
+            isSignedIn={Boolean(authEmail)}
           />
         )}
       </AnimatePresence>

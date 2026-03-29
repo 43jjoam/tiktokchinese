@@ -6,6 +6,10 @@
 
   Apply after setup_engagement_v1.sql (requires public.words).
   Then run: npm run words:metadata-seed-sql > /tmp/word_metadata.sql and execute in SQL editor.
+
+  Then apply setup_gift_v1_parity.sql for 7-day expiry, is_revoked, and daily-redeem index (redeem-gift expects these).
+
+  Sprint 3: apply setup_word_metadata_pos_tag.sql, then re-run words:metadata-seed-sql to backfill pos_tag.
 */
 
 -- ---------------------------------------------------------------------------

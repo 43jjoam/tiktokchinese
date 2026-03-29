@@ -115,3 +115,16 @@ export function loopsElapsedFromMs(elapsedMs: number): number {
   return elapsedMs / LOOP_MS
 }
 
+/** Initial `WordState` before any sessions are recorded for this word. */
+export function wordStateSeed(word: Pick<WordMetadata, 'word_id'>): WordState {
+  return {
+    word_id: word.word_id,
+    mScore: 0,
+    masteryConfirmed: false,
+    consecutiveLoop1NoTapSessions: 0,
+    lastLoop1NoTapAt: null,
+    lastSeenAt: null,
+    sessionsSeen: 0,
+  }
+}
+

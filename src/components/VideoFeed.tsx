@@ -1,8 +1,13 @@
 import type { Session } from '@supabase/supabase-js'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { SessionSignals, SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
-import { classifyTapTiming, computeTapRateAdaptiveAlpha, loopsElapsedFromMs, updateWordState } from '../lib/memoryEngine'
+import type { SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
+import { classifyTapTiming, loopsElapsedFromMs } from '../lib/memoryEngine'
+import {
+  applyStudySwipeToPersistedState,
+  qualityVideoIdForWord,
+  shouldBlockUnsignedSwipeAfterCap,
+} from '../lib/studySessionSwipeFinish'
 import {
   loadCurrentWordId,
   loadPersistedState,
@@ -18,6 +23,7 @@ import {
   getLocalLikedWordIds,
   getLocalSavedWordIds,
   recordSessionSummaryFireAndForget,
+  redeemGiftFailureMessage,
   redeemGiftToken,
   tryNativeShareWordFromUserGesture,
 } from '../lib/engagementService'
@@ -37,9 +43,9 @@ import { getWordContentKind } from '../lib/wordContentKind'
 import { extractYouTubeVideoId } from '../lib/youtubeUrl'
 import {
   clearProfileUploadDoneUserId,
-  countWordsWithSessions,
   getLastUsedAccountEmail,
   notifyCloudProfileSaved,
+  notifyPersistedStateReplaced,
   PERSISTED_STATE_REPLACED_EVENT,
   setLastUsedAccountEmail,
   setProfileUploadDoneUserId,
@@ -556,18 +562,6 @@ async function fetchTranslation(text: string, targetLang: string): Promise<strin
   }
 }
 
-function makeWordStateSeed(word: WordMetadata): WordState {
-  return {
-    word_id: word.word_id,
-    mScore: 0,
-    masteryConfirmed: false,
-    consecutiveLoop1NoTapSessions: 0,
-    lastLoop1NoTapAt: null,
-    lastSeenAt: null,
-    sessionsSeen: 0,
-  }
-}
-
 function pickRandomWord(ws: WordMetadata[]): WordMetadata {
   if (ws.length) return ws[Math.floor(Math.random() * ws.length)]
   const fb = getWordsForDeck(BUILTIN_CHINESE_CHARACTERS_1)
@@ -789,17 +783,28 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const userLangLabel = useMemo(() => langDisplayName(rawLang), [rawLang])
 
   const [persisted, setPersisted] = useState(() => loadPersistedState())
+  /** Skip reloading from storage when the write came from this tab’s own `savePersistedState` effect. */
+  const persistSaveNotifySkipRef = useRef(false)
   const [saveProgressOpen, setSaveProgressOpen] = useState(false)
   /** True when opened from “Welcome back” entry (e.g. last-used email hint) — distinct modal copy. */
   const [saveProgressWelcomeBack, setSaveProgressWelcomeBack] = useState(false)
+  /** When true, modal opens on the “link sent” step (guest hit swipe cap with link already sent). */
+  const [saveProgressForceLinkSent, setSaveProgressForceLinkSent] = useState(false)
   const [cloudSavedToast, setCloudSavedToast] = useState(false)
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
 
   useEffect(() => {
     savePersistedState(persisted)
+    persistSaveNotifySkipRef.current = true
+    notifyPersistedStateReplaced()
   }, [persisted])
 
   const { wordStates, videoQuality, meta } = persisted
+
+  const signedInUserIdRef = useRef(signedInUserId)
+  signedInUserIdRef.current = signedInUserId
+  const first20SeenRef = useRef(meta.first20Seen)
+  first20SeenRef.current = meta.first20Seen
 
   const runAuthCloudSync = useCallback(async (session: Session) => {
     const user = session.user
@@ -809,6 +814,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     const r = await syncCloudProfileAfterAuth(user.id)
     if (r.uploaded || r.merged) {
       setSaveProgressOpen(false)
+      setSaveProgressForceLinkSent(false)
       notifyCloudProfileSaved()
       setCloudSavedToast(true)
       window.setTimeout(() => setCloudSavedToast(false), 9000)
@@ -866,25 +872,40 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   useEffect(() => {
     const client = getSupabaseClient()
     if (!client) return
-    if (meta.accountMagicLinkSentAt) return
-
-    const seen = meta.first20Seen
-    const notNow = meta.accountSaveNotNowCount ?? 0
-    const shouldPrompt =
-      (notNow === 0 && seen >= 10) ||
-      (notNow === 1 && seen >= 15) ||
-      (notNow === 2 && seen >= 20)
-    if (!shouldPrompt) return
 
     void client.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setSaveProgressOpen(false)
+        setSaveProgressForceLinkSent(false)
         return
       }
+
+      const seen = meta.first20Seen
+      const notNow = meta.accountSaveNotNowCount ?? 0
+      const magicSent = Boolean(meta.accountMagicLinkSentAt)
+
+      if (magicSent && seen < 20) {
+        return
+      }
+
+      if (magicSent && seen >= 20) {
+        setSaveProgressWelcomeBack(false)
+        setSaveProgressForceLinkSent(true)
+        setSaveProgressOpen(true)
+        return
+      }
+
+      const shouldPrompt =
+        (notNow === 0 && seen >= 10) ||
+        (notNow === 1 && seen >= 15) ||
+        (notNow === 2 && seen >= 20)
+      if (!shouldPrompt) return
+
+      setSaveProgressForceLinkSent(false)
       setSaveProgressWelcomeBack(Boolean(getLastUsedAccountEmail()))
       setSaveProgressOpen(true)
     })
-  }, [meta.first20Seen, meta.accountSaveNotNowCount, meta.accountMagicLinkSentAt])
+  }, [meta.first20Seen, meta.accountSaveNotNowCount, meta.accountMagicLinkSentAt, signedInUserId])
 
   useEffect(() => {
     if (!saveProgressOpen) setSaveProgressWelcomeBack(false)
@@ -900,6 +921,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   })
   /** Signed URL from `redeem-gift` when opening `?g=<token>` (same clip as sender). */
   const [giftPlayback, setGiftPlayback] = useState<{ wordId: string; url: string } | null>(null)
+  const [giftRedeemError, setGiftRedeemError] = useState<string | null>(null)
   const currentWord = useMemo(() => {
     const found = words.find((w) => w.word_id === currentWordId)
     if (found) return found
@@ -918,6 +940,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   useEffect(() => {
     const onReplace = () => {
+      if (persistSaveNotifySkipRef.current) {
+        persistSaveNotifySkipRef.current = false
+        return
+      }
       setPersisted(loadPersistedState())
       const id = loadCurrentWordId()
       if (id && wordsRef.current.some((w) => w.word_id === id)) {
@@ -949,9 +975,11 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (g && giftTokenRe.test(g)) {
       void redeemGiftToken(g).then((r) => {
         if (!r.ok) {
+          setGiftRedeemError(redeemGiftFailureMessage(r))
           clearQuery()
           return
         }
+        setGiftRedeemError(null)
         setGiftPlayback({ wordId: r.word_id, url: r.signed_url })
         if (words.some((x) => x.word_id === r.word_id)) {
           setCurrentWordId(r.word_id)
@@ -974,6 +1002,12 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       return prev
     })
   }, [currentWordId])
+
+  useEffect(() => {
+    if (!giftRedeemError) return
+    const t = window.setTimeout(() => setGiftRedeemError(null), 14_000)
+    return () => window.clearTimeout(t)
+  }, [giftRedeemError])
 
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
@@ -1078,13 +1112,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     extractedYoutubeId,
   ])
 
-  const qualityVideoId = useMemo(
-    () =>
-      currentWord.video_storage_path
-        ? `storage:${currentWord.video_storage_path}`
-        : currentWord.video_url,
-    [currentWord.video_storage_path, currentWord.video_url],
-  )
+  const qualityVideoId = useMemo(() => qualityVideoIdForWord(currentWord), [currentWord])
 
   const elapsedMsRef = useRef(0)
   const sessionStartMsRef = useRef<number>(Date.now())
@@ -1161,6 +1189,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   const dismissSaveProgress = useCallback(() => {
     setSaveProgressOpen(false)
+    setSaveProgressForceLinkSent(false)
     setPersisted((p) => ({
       ...p,
       meta: {
@@ -1177,8 +1206,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     }))
   }, [])
 
-  const closeSaveProgressAfterSuccess = useCallback(() => {
+  const acknowledgeLinkSent = useCallback(() => {
     setSaveProgressOpen(false)
+    setSaveProgressForceLinkSent(false)
   }, [])
 
   useEffect(() => {
@@ -1322,24 +1352,20 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   useEffect(() => {
     const root = feedRootRef.current
     if (!root) return
-    let pollId: number | null = null
+    let wasVisible = false
     const obs = new IntersectionObserver(
       (entries) => {
         const vis = entries.some((e) => e.isIntersecting && e.intersectionRatio >= 0.2)
-        if (pollId !== null) {
-          window.clearInterval(pollId)
-          pollId = null
+        if (vis && !wasVisible) {
+          void refreshEngagement()
         }
-        if (vis) {
-          pollId = window.setInterval(() => void refreshEngagement(), 30_000)
-        }
+        wasVisible = vis
       },
       { threshold: [0, 0.2, 0.5] },
     )
     obs.observe(root)
     return () => {
       obs.disconnect()
-      if (pollId !== null) window.clearInterval(pollId)
     }
   }, [refreshEngagement])
 
@@ -1435,7 +1461,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   finalizeSessionRef.current = (swipeDirection: SwipeDirection) => {
     if (finalizedRef.current) return
+    if (shouldBlockUnsignedSwipeAfterCap(first20SeenRef.current, Boolean(signedInUserIdRef.current))) return
     finalizedRef.current = true
+    /* Study state / SRS: only a completed horizontal swipe finalizes a session (cf. EngagementWordPlayer Back). */
 
     encouragementStartedAtRef.current = Date.now()
     feedBufferedRef.current = false
@@ -1461,71 +1489,20 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
     const nowMs = Date.now()
     const elapsed = nowMs - sessionStartMsRef.current
-    const loopsElapsed = loopsElapsedFromMs(elapsed)
 
-    const tapOccurred = tapOccurredRef.current
-    const tapTiming = tapTimingRef.current
+    setPersisted((prev) =>
+      applyStudySwipeToPersistedState({
+        word: currentWordRef.current,
+        swipeDirection,
+        sessionElapsedMs: elapsed,
+        tapOccurred: tapOccurredRef.current,
+        tapTiming: tapTimingRef.current,
+        persisted: prev,
+        nowMs,
+      }),
+    )
 
-    const signals: SessionSignals = {
-      word_id: currentWord.word_id,
-      video_id: qualityVideoId,
-      swipeDirection,
-      loopsElapsed,
-      tapOccurred,
-      tapTiming,
-    }
-
-    const prevWord = wordStates[currentWord.word_id] ?? makeWordStateSeed(currentWord)
-    const first20SeenNext = meta.first20Seen + 1
-    const first20TappedNext = meta.first20Tapped + (tapOccurred ? 1 : 0)
-    const tapRate = first20TappedNext / Math.max(1, first20SeenNext)
-
-    const alphaCandidate = computeTapRateAdaptiveAlpha(tapRate)
-    const alpha = meta.alphaFrozen ? meta.alphaValue : alphaCandidate
-
-    const alphaFrozenNext = meta.alphaFrozen || first20SeenNext >= 20
-    const alphaValueNext = alphaFrozenNext ? alphaCandidate : meta.alphaValue
-
-    const updatedWordState = updateWordState({
-      word: currentWord,
-      prev: prevWord,
-      signals,
-      alpha,
-      nowMs,
-    })
-
-    const prevQuality = videoQuality[qualityVideoId] ?? {
-      video_id: qualityVideoId,
-      views: 0,
-      left_swipes_no_tap: 0,
-      quality_flag: false,
-    }
-
-    let nextQuality = { ...prevQuality, views: prevQuality.views + 1 }
-    if (swipeDirection === 'left' && !tapOccurred) {
-      nextQuality = {
-        ...nextQuality,
-        left_swipes_no_tap: nextQuality.left_swipes_no_tap + 1,
-      }
-      const rate = nextQuality.left_swipes_no_tap / Math.max(1, nextQuality.views)
-      nextQuality.quality_flag = rate > 0.2
-    }
-
-    setPersisted((prev) => ({
-      ...prev,
-      wordStates: { ...prev.wordStates, [currentWord.word_id]: updatedWordState },
-      videoQuality: { ...prev.videoQuality, [qualityVideoId]: nextQuality },
-      meta: {
-        ...prev.meta,
-        sessionsServed: prev.meta.sessionsServed + 1,
-        first20Seen: first20SeenNext,
-        first20Tapped: first20TappedNext,
-        alphaFrozen: alphaFrozenNext,
-        alphaValue: alphaValueNext,
-      },
-    }))
-
-    const currentId = currentWord.word_id
+    const currentId = currentWordRef.current.word_id
     setTimeout(() => {
       setSessionVideoIndex((i) => i + 1)
       const nextWord = chooseNextWordFromBuckets(currentId)
@@ -1739,9 +1716,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           type="button"
           onClick={() => {
             setSaveProgressWelcomeBack(Boolean(getLastUsedAccountEmail()))
+            setSaveProgressForceLinkSent(false)
             setSaveProgressOpen(true)
           }}
-          className="pointer-events-auto fixed right-3 top-[max(0.6rem,env(safe-area-inset-top))] z-[58] rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 shadow-[0_4px_20px_rgba(0,0,0,0.35)] ring-1 ring-black/10 active:scale-[0.98] active:opacity-95"
+          className="pointer-events-auto fixed right-[calc(env(safe-area-inset-right)+1rem)] top-[calc(env(safe-area-inset-top)+1rem)] z-[58] rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,0,0,0.45)] ring-1 ring-white/15 active:scale-[0.98] active:opacity-95"
         >
           Sign in
         </button>
@@ -2100,13 +2078,36 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       <SaveProgressModal
         open={saveProgressOpen}
         welcomeBack={saveProgressWelcomeBack}
-        wordsInProgress={countWordsWithSessions(wordStates)}
+        sessionsCompleted={meta.sessionsServed}
         initialEmail={getLastUsedAccountEmail() ?? ''}
         allowNotNow={(meta.accountSaveNotNowCount ?? 0) < 2}
+        forceLinkSentStep={saveProgressForceLinkSent}
+        linkSentHardLocked={
+          !signedInUserId &&
+          meta.first20Seen >= 20 &&
+          Boolean(meta.accountMagicLinkSentAt)
+        }
         onDismissWithoutAccount={dismissSaveProgress}
         onMagicLinkSent={recordMagicLinkSent}
-        onCloseAfterSuccess={closeSaveProgressAfterSuccess}
+        onAcknowledgeLinkSent={acknowledgeLinkSent}
       />
+
+      {giftRedeemError ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="pointer-events-auto fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[56] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-amber-400/40 bg-amber-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-amber-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-amber-400/25 backdrop-blur-sm"
+        >
+          <p className="pr-1">{giftRedeemError}</p>
+          <button
+            type="button"
+            onClick={() => setGiftRedeemError(null)}
+            className="mt-2 text-xs font-bold uppercase tracking-wide text-amber-200/90 underline-offset-2 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      ) : null}
 
       {cloudSavedToast ? (
         <div

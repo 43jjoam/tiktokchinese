@@ -1,6 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { WordMetadata } from '../lib/types'
+import { classifyTapTiming, loopsElapsedFromMs } from '../lib/memoryEngine'
+import { notifyPersistedStateReplaced } from '../lib/accountSync'
+import { loadPersistedState, savePersistedState } from '../lib/storage'
+import {
+  applyStudySwipeToPersistedState,
+  shouldBlockUnsignedSwipeAfterCap,
+} from '../lib/studySessionSwipeFinish'
+import type { SwipeDirection, TapTiming, WordMetadata } from '../lib/types'
 import { getSupabaseClient } from '../lib/deckService'
 import {
   engagementSetLike,
@@ -15,6 +22,8 @@ import {
   peekCachedLessonVideoSignedUrl,
 } from '../lib/storageVideoUrl'
 import { resolveCharacterCompounds } from '../lib/characterCompounds'
+import { resolvePosTag } from '../lib/inferPosTag'
+import { montessoriHexForPosTag } from '../lib/posTagMontessori'
 import { getWordContentKind } from '../lib/wordContentKind'
 import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
 import { extractYouTubeVideoId } from '../lib/youtubeUrl'
@@ -86,6 +95,10 @@ type Props = {
   onBack: () => void
   /** Matches grid thumbnail `layoutId` for expand-to-fullscreen transition (Saved / Liked / Shared). */
   thumbSharedLayoutId?: string
+  /** When true, anonymous guests cannot record another swipe once they hit the feed cap (parity with VideoFeed). */
+  respectAnonymousSwipeCap?: boolean
+  /** Used with `respectAnonymousSwipeCap` — true if the user has a Supabase session. */
+  isSignedIn?: boolean
 }
 
 /** Tween (not spring) so collapse-on-back finishes quickly and does not ring past the thumbnail. */
@@ -98,10 +111,17 @@ const sharedThumbLayoutTransition = {
 }
 
 /**
- * Single-word loop player from Profile (Saved / Liked / Shared): no swipe-to-next, no session memory writes.
- * Allows back, like, save, share, tap-for-meaning (and double-tap like).
+ * Single-word loop player from Profile (Saved / Liked / Shared).
+ * Horizontal swipe left/right applies the same SRS update as `VideoFeed` and returns to the grid.
+ * Back exits without recording a swipe session.
  */
-export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Props) {
+export function EngagementWordPlayer({
+  word,
+  onBack,
+  thumbSharedLayoutId,
+  respectAnonymousSwipeCap = false,
+  isSignedIn = true,
+}: Props) {
   const wordRef = useRef(word)
   wordRef.current = word
 
@@ -276,6 +296,61 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
   const [likeBurstKey, setLikeBurstKey] = useState(0)
   const [likeBurstVisible, setLikeBurstVisible] = useState(false)
   const likeBurstTimerRef = useRef<number | null>(null)
+
+  const sessionStartMsRef = useRef(Date.now())
+  const finalizedRef = useRef(false)
+  const tapOccurredRef = useRef(false)
+  const tapTimingRef = useRef<TapTiming | undefined>(undefined)
+
+  useEffect(() => {
+    finalizedRef.current = false
+    tapOccurredRef.current = false
+    tapTimingRef.current = undefined
+    sessionStartMsRef.current = Date.now()
+    if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
+    tapSingleTimeoutRef.current = null
+    lastTapUpTimeRef.current = null
+  }, [word.word_id])
+
+  const recordTap = (loopsElapsed: number) => {
+    if (tapOccurredRef.current) return
+    tapOccurredRef.current = true
+    tapTimingRef.current = classifyTapTiming(loopsElapsed)
+  }
+
+  const finalizeSwipeAndExit = useCallback(
+    (swipeDirection: SwipeDirection) => {
+      if (finalizedRef.current) return
+      finalizedRef.current = true
+      if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
+      tapSingleTimeoutRef.current = null
+      lastTapUpTimeRef.current = null
+      setL1Visible(false)
+
+      const nowMs = Date.now()
+      const elapsed = nowMs - sessionStartMsRef.current
+      const persisted = loadPersistedState()
+      if (
+        respectAnonymousSwipeCap &&
+        shouldBlockUnsignedSwipeAfterCap(persisted.meta.first20Seen, isSignedIn)
+      ) {
+        return
+      }
+      const next = applyStudySwipeToPersistedState({
+        word: wordRef.current,
+        swipeDirection,
+        sessionElapsedMs: elapsed,
+        tapOccurred: tapOccurredRef.current,
+        tapTiming: tapTimingRef.current,
+        persisted,
+        nowMs,
+      })
+      savePersistedState(next)
+      notifyPersistedStateReplaced()
+      window.setTimeout(() => onBack(), 80)
+    },
+    [onBack, respectAnonymousSwipeCap, isSignedIn],
+  )
   const triggerLikeBurst = useCallback(() => {
     setLikeBurstKey((k) => k + 1)
     setLikeBurstVisible(true)
@@ -313,7 +388,8 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
     void engagementSetSave(wordRef.current, next).then(() => refreshEngagement())
   }, [refreshEngagement])
 
-  const handleTapGesture = useCallback(() => {
+  const handleTapGesture = useCallback((loopsElapsed: number) => {
+    recordTap(loopsElapsed)
     const now = Date.now()
     const lastTapUpTime = lastTapUpTimeRef.current
     const DOUBLE_GAP_MS = 280
@@ -343,15 +419,21 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
       if (e.defaultPrevented) return
       if (e.repeat) return
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.code !== 'Space') return
       const t = e.target
       if (t instanceof HTMLElement && t.closest('input, textarea, select, [contenteditable="true"]')) return
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        finalizeSwipeAndExit(e.key === 'ArrowLeft' ? 'left' : 'right')
+        return
+      }
+      if (e.code !== 'Space') return
       e.preventDefault()
-      handleTapGesture()
+      const loops = loopsElapsedFromMs(Date.now() - sessionStartMsRef.current)
+      handleTapGesture(loops)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [handleTapGesture])
+  }, [handleTapGesture, finalizeSwipeAndExit])
 
   useEffect(() => {
     const el = gestureRef.current
@@ -386,8 +468,15 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
       const absDx = Math.abs(dx)
       const absDy = Math.abs(dy)
       const duration = Date.now() - st.startTime
-      if (absDx < 18 && absDy < 18 && duration < 450) {
-        handleTapGesture()
+      const loopsElapsed = loopsElapsedFromMs(Date.now() - sessionStartMsRef.current)
+
+      if (absDx > 30 && absDx > absDy * 0.6 && duration < 1200) {
+        finalizeSwipeAndExit(dx < 0 ? 'left' : 'right')
+        return
+      }
+
+      if (absDx < 15 && absDy < 15 && duration < 400) {
+        handleTapGesture(loopsElapsed)
       }
     }
 
@@ -399,7 +488,7 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
       el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('touchend', onTouchEnd)
     }
-  }, [handleTapGesture])
+  }, [handleTapGesture, finalizeSwipeAndExit])
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.pointerType === 'touch') return
@@ -422,8 +511,15 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
     const absDx = Math.abs(dx)
     const absDy = Math.abs(dy)
     const duration = Date.now() - ps.startTime
-    if (absDx < 18 && absDy < 18 && duration < 450) {
-      handleTapGesture()
+    const loopsElapsed = loopsElapsedFromMs(Date.now() - sessionStartMsRef.current)
+
+    if (absDx > 30 && absDx > absDy * 0.6 && duration < 1200) {
+      finalizeSwipeAndExit(dx < 0 ? 'left' : 'right')
+      return
+    }
+
+    if (absDx < 15 && absDy < 15 && duration < 400) {
+      handleTapGesture(loopsElapsed)
     }
   }
 
@@ -451,6 +547,8 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
 
   const displayedLikeCount =
     backendCountsOk && likeCount !== null ? Math.max(likeCount, liked ? 1 : 0) : null
+
+  const posMontessoriHex = useMemo(() => montessoriHexForPosTag(resolvePosTag(word)), [word])
 
   const slideTransition = { type: 'tween' as const, duration: 0.17, ease: [0.25, 0.1, 0.25, 1] as const }
 
@@ -544,6 +642,10 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
       </motion.div>
 
       <div className="pointer-events-none absolute left-0 right-0 top-0 z-50 flex items-center gap-2 bg-gradient-to-b from-black/70 to-transparent px-3 pb-10 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        {/*
+          Product choice (matches main feed: only a completed swipe is an SRS session): Back closes without
+          finalizeSwipeAndExit — loop/watch time alone is not scored. Do not add implicit flush on unmount.
+        */}
         <button
           type="button"
           onClick={onBack}
@@ -569,7 +671,7 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         role="application"
-        aria-label="Video replay. Tap for meaning. Swipe is disabled here."
+        aria-label="Video replay. Tap for meaning. Swipe left or right to save review and go back."
       >
         <AnimatePresence>
           {likeBurstVisible && (
@@ -589,7 +691,10 @@ export function EngagementWordPlayer({ word, onBack, thumbSharedLayoutId }: Prop
 
       {!l1Visible && chromeReady ? (
         <div className="pointer-events-none absolute left-1/2 top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] z-20 -translate-x-1/2 text-center">
-          <div className="inline-block rounded-2xl bg-black/25 px-5 py-2.5 backdrop-blur-sm">
+          <div
+            className="inline-block rounded-2xl border-l-[3px] bg-black/25 px-5 py-2.5 backdrop-blur-sm"
+            style={{ borderLeftColor: posMontessoriHex }}
+          >
             <div className="text-3xl font-semibold tracking-tight text-white">{word.character}</div>
             <div className="mt-0.5 text-base text-white/85">{word.pinyin}</div>
           </div>

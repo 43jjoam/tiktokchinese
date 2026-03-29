@@ -1,5 +1,8 @@
 import type { VideoQualityState, WordState } from './types'
 
+/** Fired after local study state is written — Profile and other tabs reload from storage. */
+export const PERSISTED_STATE_REPLACED_EVENT = 'tiktokchinese:persisted-state-replaced'
+
 const KEY_CURRENT_WORD_ID = 'stealthSwipe.currentWordId.v1'
 const KEY_WORD_STATES = 'stealthSwipe.wordStates.v1'
 const KEY_VIDEO_QUALITY = 'stealthSwipe.videoQuality.v1'

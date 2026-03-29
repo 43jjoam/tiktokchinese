@@ -2,6 +2,9 @@ import type { WordMetadata } from './types'
 import { getSupabaseClient } from './deckService'
 import { clipKeyForWord } from './clipKey'
 import { getDeviceHashForEngagement } from './deviceHash'
+import { getGlobalEngagementCounts, invalidateEngagementCountCache } from './engagementCounts'
+import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
+import { enqueueSyncOutboxJob } from './syncOutbox'
 
 export const ENGAGEMENT_LOCAL_CHANGED_EVENT = 'tiktokchinese:engagement-local-changed'
 
@@ -97,33 +100,11 @@ export function recordLocalShare(wordId: string): void {
   persistIdList(LOCAL_SHARED, ids)
 }
 
-function functionsUrl(): string | null {
-  const u = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL as string | undefined
-  if (u?.trim()) return u.replace(/\/$/, '')
-  const base = import.meta.env.VITE_SUPABASE_URL as string | undefined
-  if (!base?.trim()) return null
-  return `${base.replace(/\/$/, '')}/functions/v1`
-}
-
-async function invokeRecordEngagement(body: Record<string, unknown>): Promise<boolean> {
-  const url = functionsUrl()
+async function queueRecordEngagement(body: Record<string, unknown>): Promise<void> {
+  const url = getSupabaseFunctionsBaseUrl()
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-  if (!url || !anon) return false
-
-  try {
-    const res = await fetch(`${url}/record-engagement`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${anon}`,
-        apikey: anon,
-      },
-      body: JSON.stringify(body),
-    })
-    return res.ok
-  } catch {
-    return false
-  }
+  if (!url || !anon) return
+  await enqueueSyncOutboxJob('record-engagement', body)
 }
 
 const GIFT_SHARE_CACHE_MS = 10 * 60 * 1000
@@ -138,18 +119,67 @@ export type RedeemGiftOk = {
   en_meaning: string
 }
 
-export type RedeemGiftResult = RedeemGiftOk | { ok: false }
+export type RedeemGiftFailureReason =
+  | 'expired'
+  | 'revoked'
+  | 'daily_receive_cap'
+  | 'not_found'
+  | 'invalid_token'
+  | 'config'
+  | 'network'
+  | 'unknown'
+
+export type RedeemGiftFailure = {
+  ok: false
+  reason: RedeemGiftFailureReason
+  /** Server cap when `reason === 'daily_receive_cap'`. */
+  cap?: number
+}
+
+export type RedeemGiftResult = RedeemGiftOk | RedeemGiftFailure
+
+/** User-facing copy for gift redeem failures (matches `redeem-gift` Edge errors). */
+export function redeemGiftFailureMessage(f: RedeemGiftFailure): string {
+  switch (f.reason) {
+    case 'expired':
+      return 'This gift link has expired — ask your friend to send a new one.'
+    case 'revoked':
+      return 'This gift is no longer available.'
+    case 'daily_receive_cap': {
+      const n = f.cap ?? 3
+      return `You've received ${n} gift${n === 1 ? '' : 's'} today — come back tomorrow.`
+    }
+    case 'not_found':
+      return "We couldn't find that gift link. Check the link or ask your friend to resend it."
+    case 'invalid_token':
+      return "That gift link doesn't look valid."
+    case 'config':
+      return 'Gifts are temporarily unavailable in this app build.'
+    case 'network':
+      return "Couldn't reach the server. Check your connection and try again."
+    default:
+      return "Something went wrong opening this gift. Please try again."
+  }
+}
+
+function parseRedeemErrorBody(raw: unknown): { code: string; cap?: number } {
+  if (!raw || typeof raw !== 'object') return { code: '' }
+  const o = raw as { error?: unknown; cap?: unknown }
+  const code = typeof o.error === 'string' ? o.error : ''
+  const cap = typeof o.cap === 'number' && Number.isFinite(o.cap) ? Math.max(1, Math.floor(o.cap)) : undefined
+  return { code, cap }
+}
 
 /**
  * Redeem a gift token from `?g=` / `/g/<token>`; returns a short-lived signed Storage URL for playback.
  */
 export async function redeemGiftToken(token: string): Promise<RedeemGiftResult> {
   const t = token.trim()
-  if (!/^[0-9a-f]{32}$/i.test(t)) return { ok: false }
+  if (!/^[0-9a-f]{32}$/i.test(t)) return { ok: false, reason: 'invalid_token' }
 
-  const url = functionsUrl()
+  const url = getSupabaseFunctionsBaseUrl()
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
-  if (!url || !anon) return { ok: false }
+  if (!url || !anon) return { ok: false, reason: 'config' }
 
   const device_hash = await getDeviceHashForEngagement()
   try {
@@ -162,8 +192,26 @@ export async function redeemGiftToken(token: string): Promise<RedeemGiftResult> 
       },
       body: JSON.stringify({ token: t, device_hash }),
     })
-    if (!res.ok) return { ok: false }
-    const j = (await res.json()) as {
+
+    let parsed: unknown = null
+    try {
+      parsed = await res.json()
+    } catch {
+      parsed = null
+    }
+
+    if (!res.ok) {
+      const { code, cap } = parseRedeemErrorBody(parsed)
+      if (res.status === 410 && code === 'expired') return { ok: false, reason: 'expired' }
+      if (res.status === 403 && code === 'revoked') return { ok: false, reason: 'revoked' }
+      if (res.status === 429 && code === 'daily_receive_cap') {
+        return { ok: false, reason: 'daily_receive_cap', cap }
+      }
+      if (res.status === 404 && code === 'not_found') return { ok: false, reason: 'not_found' }
+      return { ok: false, reason: 'unknown' }
+    }
+
+    const j = parsed as {
       ok?: boolean
       word_id?: string
       signed_url?: string
@@ -171,7 +219,7 @@ export async function redeemGiftToken(token: string): Promise<RedeemGiftResult> 
       pinyin?: string
       en_meaning?: string
     }
-    if (!j?.ok || !j.word_id || !j.signed_url) return { ok: false }
+    if (!j?.ok || !j.word_id || !j.signed_url) return { ok: false, reason: 'unknown' }
     return {
       ok: true,
       word_id: j.word_id,
@@ -181,7 +229,7 @@ export async function redeemGiftToken(token: string): Promise<RedeemGiftResult> 
       en_meaning: j.en_meaning ?? '',
     }
   } catch {
-    return { ok: false }
+    return { ok: false, reason: 'network' }
   }
 }
 
@@ -198,7 +246,7 @@ export async function resolveShareUrlForWord(word: WordMetadata): Promise<string
     return cached.share_url
   }
 
-  const url = functionsUrl()
+  const url = getSupabaseFunctionsBaseUrl()
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!url || !anon) {
     return buildShareUrl(word.word_id)
@@ -229,27 +277,14 @@ export async function resolveShareUrlForWord(word: WordMetadata): Promise<string
   }
 }
 
-/** Fire-and-forget session telemetry (visibility / lifecycle). */
+/** Session telemetry — queued and flushed with backoff (same pipeline as engagement). */
 export function recordSessionSummaryFireAndForget(payload: Record<string, unknown>): void {
-  const url = functionsUrl()
+  const url = getSupabaseFunctionsBaseUrl()
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!url || !anon) return
 
   void getDeviceHashForEngagement().then((device_hash) => {
-    try {
-      void fetch(`${url}/record-session-summary`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${anon}`,
-          apikey: anon,
-        },
-        body: JSON.stringify({ device_hash, payload }),
-        keepalive: true,
-      })
-    } catch {
-      /* ignore */
-    }
+    void enqueueSyncOutboxJob('record-session-summary', { device_hash, payload })
   })
 }
 
@@ -284,44 +319,46 @@ export async function fetchEngagementSnapshot(word: WordMetadata): Promise<Engag
   }
 
   try {
-    const [likeCountRes, saveCountRes, myLike, mySave] = await Promise.all([
-      supabase.from('engagement_events').select('*', { count: 'exact', head: true }).eq('word_id', wid).eq('type', 'like'),
-      supabase.from('engagement_events').select('*', { count: 'exact', head: true }).eq('word_id', wid).eq('type', 'save'),
-      supabase
-        .from('engagement_events')
-        .select('id')
-        .eq('word_id', wid)
-        .eq('type', 'like')
-        .eq('device_hash', dh)
-        .maybeSingle(),
-      supabase
-        .from('engagement_events')
-        .select('id')
-        .eq('word_id', wid)
-        .eq('type', 'save')
-        .eq('device_hash', dh)
-        .maybeSingle(),
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const uid = session?.user?.id ?? null
+
+    const pickRow = async (type: 'like' | 'save') => {
+      const q = () => supabase.from('engagement_events').select('id').eq('word_id', wid).eq('type', type)
+      if (uid) {
+        const u = await q().eq('user_id', uid).maybeSingle()
+        if (u.data) return u
+        return q().eq('device_hash', dh).is('user_id', null).maybeSingle()
+      }
+      return q().eq('device_hash', dh).is('user_id', null).maybeSingle()
+    }
+
+    const [myLike, mySave, counts] = await Promise.all([
+      pickRow('like'),
+      pickRow('save'),
+      getGlobalEngagementCounts(wid),
     ])
 
-    const le = likeCountRes.error
-    const se = saveCountRes.error
+    const me = myLike.error
+    const mse = mySave.error
     const L = readLocal()
-    if (le || se) {
+    if (me || mse) {
       return {
-        likeCount: null,
-        saveCount: null,
+        likeCount: counts.ok ? counts.likes : null,
+        saveCount: counts.ok ? counts.saves : null,
         liked: L.liked,
         saved: L.saved,
-        backendCountsOk: false,
+        backendCountsOk: counts.ok,
       }
     }
 
     return {
-      likeCount: likeCountRes.count ?? 0,
-      saveCount: saveCountRes.count ?? 0,
+      likeCount: counts.ok ? counts.likes : null,
+      saveCount: counts.ok ? counts.saves : null,
       liked: !!myLike.data || L.liked,
       saved: !!mySave.data || L.saved,
-      backendCountsOk: true,
+      backendCountsOk: counts.ok,
     }
   } catch {
     const L = readLocal()
@@ -340,18 +377,16 @@ export async function engagementSetLike(word: WordMetadata, on: boolean): Promis
   let ids = getLikedIdsOrdered().filter((x) => x !== wid)
   if (on) ids.unshift(wid)
   persistIdList(LOCAL_LIKED, ids)
+  invalidateEngagementCountCache(wid)
 
   const clip = clipKeyForWord(word)
   const dh = await getDeviceHashForEngagement()
-  const ok = await invokeRecordEngagement({
+  await queueRecordEngagement({
     op: on ? 'like_set' : 'like_clear',
     word_id: wid,
     clip_key: clip,
     device_hash: dh,
   })
-  if (!ok && on) {
-    /* keep local optimistic liked; count may show — */
-  }
 }
 
 export async function engagementSetSave(word: WordMetadata, on: boolean): Promise<void> {
@@ -359,10 +394,11 @@ export async function engagementSetSave(word: WordMetadata, on: boolean): Promis
   let ids = getSavedIdsOrdered().filter((x) => x !== wid)
   if (on) ids.unshift(wid)
   persistIdList(LOCAL_SAVED, ids)
+  invalidateEngagementCountCache(wid)
 
   const clip = clipKeyForWord(word)
   const dh = await getDeviceHashForEngagement()
-  await invokeRecordEngagement({
+  await queueRecordEngagement({
     op: on ? 'save_set' : 'save_clear',
     word_id: wid,
     clip_key: clip,
@@ -372,7 +408,7 @@ export async function engagementSetSave(word: WordMetadata, on: boolean): Promis
 
 export async function engagementShareTap(word: WordMetadata): Promise<void> {
   const dh = await getDeviceHashForEngagement()
-  await invokeRecordEngagement({
+  await queueRecordEngagement({
     op: 'share_tap',
     word_id: word.word_id,
     clip_key: clipKeyForWord(word),
@@ -396,7 +432,7 @@ export async function engagementShareSuccess(
   method: ShareSuccessMethod,
 ): Promise<void> {
   const dh = await getDeviceHashForEngagement()
-  await invokeRecordEngagement({
+  await queueRecordEngagement({
     op: 'share_success',
     word_id: word.word_id,
     clip_key: clipKeyForWord(word),

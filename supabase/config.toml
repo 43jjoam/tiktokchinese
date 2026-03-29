@@ -420,6 +420,21 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/handle-gift-link/index.ts"
 
+[functions.record-engagement]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/record-engagement/index.ts"
+
+[functions.merge-device-engagement]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/merge-device-engagement/index.ts"
+
+[functions.get-counts]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/get-counts/index.ts"
+
 [functions.record-session-summary]
 enabled = true
 verify_jwt = true

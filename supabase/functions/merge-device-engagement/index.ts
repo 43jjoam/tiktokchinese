@@ -4,11 +4,6 @@ import { corsHeaders, DEFAULT_ALLOWED_ORIGINS } from "../_shared/cors.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-const MAX_PAYLOAD_BYTES = Math.min(
-  Math.max(Number(Deno.env.get("SESSION_SUMMARY_MAX_BYTES") ?? "24000") || 24000, 1024),
-  120000,
-);
-
 const HEX64 = /^[0-9a-f]{64}$/i;
 function validDeviceHash(h: string): boolean {
   if (HEX64.test(h)) return true;
@@ -16,7 +11,7 @@ function validDeviceHash(h: string): boolean {
   return false;
 }
 
-type Body = { device_hash?: string; payload?: unknown };
+type Body = { device_hash?: string };
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
@@ -33,26 +28,18 @@ Deno.serve(async (req) => {
     return new Response("Forbidden", { status: 403, headers: corsHeaders(origin) });
   }
 
-  let raw: string;
-  try {
-    raw = await req.text();
-  } catch {
-    return new Response(JSON.stringify({ error: "invalid_body" }), {
-      status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-    });
-  }
-
-  if (raw.length > MAX_PAYLOAD_BYTES) {
-    return new Response(JSON.stringify({ error: "payload_too_large" }), {
-      status: 413,
+  const auth = req.headers.get("authorization")?.trim() ?? "";
+  const token = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
+  if (!token) {
+    return new Response(JSON.stringify({ error: "missing_authorization" }), {
+      status: 401,
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }
 
   let body: Body;
   try {
-    body = JSON.parse(raw) as Body;
+    body = (await req.json()) as Body;
   } catch {
     return new Response(JSON.stringify({ error: "invalid_json" }), {
       status: 400,
@@ -68,29 +55,30 @@ Deno.serve(async (req) => {
     });
   }
 
-  const payload = body.payload;
-  if (payload === undefined || typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-    return new Response(JSON.stringify({ error: "invalid_payload" }), {
-      status: 400,
+  const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const { data: userData, error: userErr } = await admin.auth.getUser(token);
+  if (userErr || !userData?.user?.id) {
+    return new Response(JSON.stringify({ error: "invalid_token" }), {
+      status: 401,
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-  const { error } = await supabase.from("session_summaries").insert({
-    device_hash,
-    payload,
+  const userId = userData.user.id;
+  const { data: rpcData, error: rpcErr } = await admin.rpc("merge_engagement_device_to_user", {
+    p_user_id: userId,
+    p_device_hash: device_hash,
   });
 
-  if (error) {
-    console.error("record-session-summary", error);
-    return new Response(JSON.stringify({ error: "write_failed" }), {
+  if (rpcErr) {
+    console.error("merge-device-engagement rpc", rpcErr);
+    return new Response(JSON.stringify({ error: "merge_failed" }), {
       status: 500,
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
+  return new Response(JSON.stringify({ ok: true, result: rpcData }), {
     status: 200,
     headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
   });

@@ -1,3 +1,5 @@
+import type { PosTag } from './posTag'
+
 export type Locale = 'en' | 'zh-TW' | 'th'
 
 export type WordId = string
@@ -52,6 +54,8 @@ export type WordMetadata = {
   illustrative_sentence?: IllustrativeSentence
   /** Shown under examples, e.g. "CC-CEDICT (CC BY-SA 4.0)". */
   dictionary_attribution?: string
+  /** Curated POS; when absent, `resolvePosTag` uses heuristics (see inferPosTag.ts). */
+  pos_tag?: PosTag
 }
 
 export type WordState = {

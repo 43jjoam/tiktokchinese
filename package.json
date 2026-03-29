@@ -15,6 +15,7 @@
     "mascot:install": "node scripts/install-mascot-video.mjs",
     "words:seed-sql": "node scripts/generate-words-seed.mjs",
     "words:metadata-seed-sql": "tsx scripts/generate-word-metadata-seed.ts",
+    "words:tag-pos-openai": "tsx scripts/tag-pos-openai.ts",
     "configure:supabase-auth-smtp": "node scripts/configure-supabase-auth-smtp-resend.mjs"
   },
   "dependencies": {

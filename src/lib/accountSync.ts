@@ -1,17 +1,20 @@
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
+import { getDeviceHashForEngagement } from './deviceHash'
 import { getSupabaseClient } from './deckService'
+import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
 import {
   clearCurrentWordId,
   DEFAULT_STUDY_META,
   loadCurrentWordId,
   loadPersistedState,
   saveCurrentWordId,
+  PERSISTED_STATE_REPLACED_EVENT,
   savePersistedState,
   type PersistedState,
 } from './storage'
 import type { WordState } from './types'
 
-export const PERSISTED_STATE_REPLACED_EVENT = 'tiktokchinese:persisted-state-replaced'
+export { PERSISTED_STATE_REPLACED_EVENT }
 
 /** Fired after `user_learning_profiles` upload succeeds (e.g. magic link sign-in). */
 export const CLOUD_PROFILE_SAVED_EVENT = 'tiktokchinese:cloud-profile-saved'
@@ -313,11 +316,41 @@ export async function uploadLearningProfileWithLocalMeta(): Promise<
  * profile cannot block downloading this user's cloud row (otherwise the feed stays "new" while Auth shows
  * the signed-in email).
  */
+/**
+ * Attach anonymous `device_hash` engagement rows to the signed-in user (idempotent).
+ * Requires `merge_engagement_device_to_user` + Edge `merge-device-engagement` deployed.
+ */
+export async function mergeDeviceEngagementAfterSignIn(): Promise<void> {
+  const base = getSupabaseFunctionsBaseUrl()
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  const supabase = getSupabaseClient()
+  if (!base || !anon?.trim() || !supabase) return
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.access_token) return
+  const device_hash = await getDeviceHashForEngagement()
+  try {
+    await fetch(`${base}/merge-device-engagement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: anon,
+      },
+      body: JSON.stringify({ device_hash }),
+    })
+  } catch {
+    /* non-fatal */
+  }
+}
+
 export async function syncCloudProfileAfterAuth(userId: string): Promise<{
   uploaded: boolean
   merged: boolean
   uploadError?: string
 }> {
+  await mergeDeviceEngagementAfterSignIn()
   let local = loadPersistedState()
   const prevCloudUid = local.meta.lastCloudProfileUserId
 
@@ -362,6 +395,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<{
         lastMergedRemoteUpdatedAt: undefined,
       },
     })
+    notifyPersistedStateReplaced()
     local = loadPersistedState()
   }
 
