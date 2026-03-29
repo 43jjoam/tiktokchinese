@@ -3,9 +3,18 @@ import { getSupabaseClient } from '../lib/deckService'
 
 type Phase = 'working' | 'done' | 'error'
 
+const EMAIL_OTP_TYPES = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email'] as const
+type EmailOtpType = (typeof EMAIL_OTP_TYPES)[number]
+
+function parseEmailOtpType(raw: string | null): EmailOtpType {
+  if (raw && (EMAIL_OTP_TYPES as readonly string[]).includes(raw)) return raw as EmailOtpType
+  return 'magiclink'
+}
+
 /**
- * Minimal full-screen step after the user taps the email magic link.
- * Supabase exchanges `?code=` here; then we replace the URL with `/` and show the main app.
+ * Full-screen step when the user opens the magic-link URL (path `/auth/callback`).
+ * Completes sign-in via: (1) `token_hash` in query — best for Outlook / in-app browsers;
+ * (2) tokens in hash or PKCE `code` in query — handled by `auth.initialize()`.
  */
 export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) {
   const [phase, setPhase] = useState<Phase>('working')
@@ -57,6 +66,30 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
 
     void (async () => {
       try {
+        const url = new URL(window.location.href)
+        const tokenHash = url.searchParams.get('token_hash')
+        if (tokenHash) {
+          const type = parseEmailOtpType(url.searchParams.get('type'))
+          const { data, error } = await client.auth.verifyOtp({ token_hash: tokenHash, type })
+          if (cancelled) return
+          if (error) {
+            setDetail(error.message)
+            setPhase('error')
+            return
+          }
+          if (data.session?.user) {
+            url.searchParams.delete('token_hash')
+            url.searchParams.delete('type')
+            const qs = url.searchParams.toString()
+            window.history.replaceState({}, '', url.pathname + (qs ? `?${qs}` : '') + url.hash)
+            finishOk()
+            return
+          }
+          setDetail('Sign-in did not return a session. Request a new link from the app.')
+          setPhase('error')
+          return
+        }
+
         const { error: initErr } = await client.auth.initialize()
         if (cancelled) return
         if (initErr) {
@@ -83,7 +116,7 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
         if (session?.user) finishOk()
         else {
           setDetail(
-            'We could not complete sign-in. Request a new link from the app and open it in Safari or Chrome if this keeps happening.',
+            'You’re on the sign-in callback page (/auth/callback). Email apps often break magic links. Try “Open in Safari” (or Chrome), or request a new link. If it keeps failing, set the Magic link email template in Supabase to use token_hash — see env.example in the repo.',
           )
           setPhase('error')
         }
@@ -104,7 +137,7 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
         <>
           <h1 className="mt-4 text-xl font-bold leading-snug">Signing you in…</h1>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-white/55">
-            One moment while we connect your account. You’ll go to your learning feed next.
+            This is the email sign-in page. You’ll continue to your learning feed in a moment.
           </p>
           <div
             className="mt-8 h-9 w-9 animate-spin rounded-full border-2 border-white/20 border-t-white/90"

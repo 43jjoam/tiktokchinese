@@ -1,20 +1,7 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { randomUuidV4 } from './randomUuid'
+import { getSupabaseClient } from './deckService'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 const LOCAL_KEY = 'tiktokchinese_likes'
-
-let supabase: SupabaseClient | null = null
-if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'implicit',
-      detectSessionInUrl: true,
-      persistSession: true,
-    },
-  })
-}
 
 let cachedIpHash: string | null = null
 
@@ -47,6 +34,7 @@ function saveLocal(set: Set<string>) {
 }
 
 export async function getLikeStatus(videoId: string): Promise<{ liked: boolean; count: number }> {
+  const supabase = getSupabaseClient()
   if (!supabase) {
     const liked = localLikes().has(videoId)
     return { liked, count: liked ? 1 : 0 }
@@ -61,6 +49,7 @@ export async function getLikeStatus(videoId: string): Promise<{ liked: boolean; 
 }
 
 export async function toggleLike(videoId: string): Promise<{ liked: boolean; count: number }> {
+  const supabase = getSupabaseClient()
   if (!supabase) {
     const store = localLikes()
     const wasLiked = store.has(videoId)
