@@ -403,6 +403,27 @@ import_map = "./functions/shopify-webhook/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
 entrypoint = "./functions/shopify-webhook/index.ts"
+
+[functions.create-gift]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/create-gift/index.ts"
+
+[functions.redeem-gift]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/redeem-gift/index.ts"
+
+[functions.handle-gift-link]
+enabled = true
+# Crawlers and link previews do not send Supabase JWTs.
+verify_jwt = false
+entrypoint = "./functions/handle-gift-link/index.ts"
+
+[functions.record-session-summary]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/record-session-summary/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/shopify-webhook/*.html" ]

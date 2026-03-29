@@ -7,7 +7,13 @@ const LOCAL_KEY = 'tiktokchinese_likes'
 
 let supabase: SupabaseClient | null = null
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      persistSession: true,
+    },
+  })
 }
 
 let cachedIpHash: string | null = null

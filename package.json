@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && cp dist/index.html dist/404.html",
     "preview": "vite preview --host --port 5173",
     "setup:env": "node scripts/setup-env-interactive.mjs",
     "setup:env:blank": "node scripts/copy-env-example.mjs",
@@ -13,7 +13,8 @@
     "videos:storage-keys": "node scripts/list-video-storage-keys.mjs",
     "test:storage-url": "node scripts/test-storage-signed-url.mjs",
     "mascot:install": "node scripts/install-mascot-video.mjs",
-    "words:seed-sql": "node scripts/generate-words-seed.mjs"
+    "words:seed-sql": "node scripts/generate-words-seed.mjs",
+    "words:metadata-seed-sql": "tsx scripts/generate-word-metadata-seed.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
@@ -29,6 +30,7 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.10",
+    "tsx": "^4.21.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.2"
   }

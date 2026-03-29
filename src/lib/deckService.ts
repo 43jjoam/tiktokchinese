@@ -7,7 +7,13 @@ const LOCAL_KEY = 'tiktokchinese_activated_decks'
 
 let supabase: SupabaseClient | null = null
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      persistSession: true,
+    },
+  })
 }
 
 /** Shared browser client (anon) for storage signed URLs, deck activation, etc. */

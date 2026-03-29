@@ -126,6 +126,133 @@ async function invokeRecordEngagement(body: Record<string, unknown>): Promise<bo
   }
 }
 
+const GIFT_SHARE_CACHE_MS = 10 * 60 * 1000
+const giftShareUrlByWordId = new Map<string, { share_url: string; at: number }>()
+
+export type RedeemGiftOk = {
+  ok: true
+  word_id: string
+  signed_url: string
+  character: string
+  pinyin: string
+  en_meaning: string
+}
+
+export type RedeemGiftResult = RedeemGiftOk | { ok: false }
+
+/**
+ * Redeem a gift token from `?g=` / `/g/<token>`; returns a short-lived signed Storage URL for playback.
+ */
+export async function redeemGiftToken(token: string): Promise<RedeemGiftResult> {
+  const t = token.trim()
+  if (!/^[0-9a-f]{32}$/i.test(t)) return { ok: false }
+
+  const url = functionsUrl()
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!url || !anon) return { ok: false }
+
+  const device_hash = await getDeviceHashForEngagement()
+  try {
+    const res = await fetch(`${url}/redeem-gift`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anon}`,
+        apikey: anon,
+      },
+      body: JSON.stringify({ token: t, device_hash }),
+    })
+    if (!res.ok) return { ok: false }
+    const j = (await res.json()) as {
+      ok?: boolean
+      word_id?: string
+      signed_url?: string
+      character?: string
+      pinyin?: string
+      en_meaning?: string
+    }
+    if (!j?.ok || !j.word_id || !j.signed_url) return { ok: false }
+    return {
+      ok: true,
+      word_id: j.word_id,
+      signed_url: j.signed_url,
+      character: j.character ?? '',
+      pinyin: j.pinyin ?? '',
+      en_meaning: j.en_meaning ?? '',
+    }
+  } catch {
+    return { ok: false }
+  }
+}
+
+/**
+ * Prefer canonical gift link from `create-gift`; fall back to `?w=` when functions or metadata are unavailable.
+ */
+export async function resolveShareUrlForWord(word: WordMetadata): Promise<string> {
+  if (import.meta.env.VITE_DISABLE_GIFT_SHARE === 'true') {
+    return buildShareUrl(word.word_id)
+  }
+
+  const cached = giftShareUrlByWordId.get(word.word_id)
+  if (cached && Date.now() - cached.at < GIFT_SHARE_CACHE_MS) {
+    return cached.share_url
+  }
+
+  const url = functionsUrl()
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!url || !anon) {
+    return buildShareUrl(word.word_id)
+  }
+
+  const device_hash = await getDeviceHashForEngagement()
+  try {
+    const res = await fetch(`${url}/create-gift`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anon}`,
+        apikey: anon,
+      },
+      body: JSON.stringify({ word_id: word.word_id, device_hash }),
+    })
+    if (!res.ok) {
+      return buildShareUrl(word.word_id)
+    }
+    const j = (await res.json()) as { ok?: boolean; share_url?: string }
+    if (!j?.ok || !j.share_url?.trim()) {
+      return buildShareUrl(word.word_id)
+    }
+    giftShareUrlByWordId.set(word.word_id, { share_url: j.share_url, at: Date.now() })
+    return j.share_url
+  } catch {
+    return buildShareUrl(word.word_id)
+  }
+}
+
+/** Fire-and-forget session telemetry (visibility / lifecycle). */
+export function recordSessionSummaryFireAndForget(payload: Record<string, unknown>): void {
+  const url = functionsUrl()
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+  if (!url || !anon) return
+
+  void getDeviceHashForEngagement().then((device_hash) => {
+    try {
+      void fetch(`${url}/record-session-summary`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${anon}`,
+          apikey: anon,
+        },
+        body: JSON.stringify({ device_hash, payload }),
+        keepalive: true,
+      })
+    } catch {
+      /* ignore */
+    }
+  })
+}
+
 export type EngagementSnapshot = {
   likeCount: number | null
   saveCount: number | null
@@ -323,23 +450,23 @@ export function tryNativeShareWordFromUserGesture(word: WordMetadata, callbacks:
     devLogIfWebShareMissingDueToInsecureContext()
     return false
   }
-  const url = buildShareUrl(word.word_id)
-  const text = buildChallengeShareText(word, url)
-  void navigator
-    .share({
-      title: 'Chinese Flash',
-      text,
-      url,
-    })
-    .then(async () => {
+  void (async () => {
+    const url = await resolveShareUrlForWord(word)
+    const text = buildChallengeShareText(word, url)
+    try {
+      await navigator.share({
+        title: 'Chinese Flash',
+        text,
+        url,
+      })
       recordLocalShare(word.word_id)
       await engagementShareTap(word)
       await engagementShareSuccess(word, 'web_share')
       callbacks.onShared?.()
-    })
-    .catch((e: unknown) => {
+    } catch (e: unknown) {
       if ((e as { name?: string })?.name === 'AbortError') return
       callbacks.onFallback()
-    })
+    }
+  })()
   return true
 }

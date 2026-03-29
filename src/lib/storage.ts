@@ -11,6 +11,15 @@ export type AppMeta = {
   first20Tapped: number
   alphaFrozen: boolean
   alphaValue: number
+  /**
+   * Save prompt: times user tapped "Not now" (0–2).
+   * 0 → prompt at 10 swipes (with Not now); 1 → again at 15; 2 → final at 20 without Not now.
+   */
+  accountSaveNotNowCount?: number
+  /** Magic link sent; suppress re-showing the prompt until sign-in */
+  accountMagicLinkSentAt?: number
+  /** ISO timestamp from `user_learning_profiles.updated_at` after last merge or upload */
+  lastMergedRemoteUpdatedAt?: string | null
 }
 
 export type PersistedState = {
@@ -66,7 +75,19 @@ export function loadPersistedState(): PersistedState {
 
   try {
     const rawMeta = localStorage.getItem(KEY_APP_META)
-    if (rawMeta) empty.meta = { ...defaultMeta, ...JSON.parse(rawMeta) }
+    if (rawMeta) {
+      const parsed = JSON.parse(rawMeta) as Record<string, unknown>
+      const m = { ...defaultMeta, ...parsed } as AppMeta
+      /* Legacy: old “dismiss forever” → treat as two snoozes so final gate can still apply at 20+ swipes */
+      if (
+        parsed.accountSavePromptDismissed === true &&
+        m.accountSaveNotNowCount === undefined
+      ) {
+        m.accountSaveNotNowCount = 2
+      }
+      delete (m as { accountSavePromptDismissed?: boolean }).accountSavePromptDismissed
+      empty.meta = m
+    }
   } catch {
     // ignore
   }

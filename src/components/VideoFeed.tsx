@@ -1,3 +1,4 @@
+import type { Session } from '@supabase/supabase-js'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SessionSignals, SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
@@ -16,6 +17,8 @@ import {
   fetchEngagementSnapshot,
   getLocalLikedWordIds,
   getLocalSavedWordIds,
+  recordSessionSummaryFireAndForget,
+  redeemGiftToken,
   tryNativeShareWordFromUserGesture,
 } from '../lib/engagementService'
 import {
@@ -32,7 +35,19 @@ import { getSwipeEncouragementBundle, resolveSwipeEncouragementLang } from '../l
 import { resolveCharacterCompounds } from '../lib/characterCompounds'
 import { getWordContentKind } from '../lib/wordContentKind'
 import { extractYouTubeVideoId } from '../lib/youtubeUrl'
+import {
+  clearProfileUploadDoneUserId,
+  countWordsWithSessions,
+  getLastUsedAccountEmail,
+  notifyCloudProfileSaved,
+  PERSISTED_STATE_REPLACED_EVENT,
+  setLastUsedAccountEmail,
+  setProfileUploadDoneUserId,
+  syncCloudProfileAfterAuth,
+  uploadLearningProfileWithLocalMeta,
+} from '../lib/accountSync'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
+import { SaveProgressModal } from './SaveProgressModal'
 import { ShareWordSheet } from './ShareWordSheet'
 import { prefetchYouTubeIframeApi, YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
 
@@ -702,6 +717,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     }
   }, [])
 
+  const wordsRef = useRef(words)
+  wordsRef.current = words
+
   useEffect(() => {
     void prefetchYouTubeIframeApi()
   }, [])
@@ -731,12 +749,105 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const userLangLabel = useMemo(() => langDisplayName(rawLang), [rawLang])
 
   const [persisted, setPersisted] = useState(() => loadPersistedState())
+  const [saveProgressOpen, setSaveProgressOpen] = useState(false)
+  /** True when opened from corner Sign in — “Welcome back” copy and flow. */
+  const [saveProgressWelcomeBack, setSaveProgressWelcomeBack] = useState(false)
+  const [cloudSavedToast, setCloudSavedToast] = useState(false)
+  const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
 
   useEffect(() => {
     savePersistedState(persisted)
   }, [persisted])
 
   const { wordStates, videoQuality, meta } = persisted
+
+  const runAuthCloudSync = useCallback(async (session: Session) => {
+    const user = session.user
+    if (!user?.id) return
+    if (user.email) setLastUsedAccountEmail(user.email)
+    const r = await syncCloudProfileAfterAuth(user.id)
+    if (r.uploaded) {
+      setSaveProgressOpen(false)
+      notifyCloudProfileSaved()
+      setCloudSavedToast(true)
+      window.setTimeout(() => setCloudSavedToast(false), 9000)
+    }
+  }, [])
+
+  useEffect(() => {
+    const client = getSupabaseClient()
+    if (!client) return
+    void client.auth.getSession().then(({ data: { session } }) => {
+      setSignedInUserId(session?.user?.id ?? null)
+    })
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(async (event, session) => {
+      setSignedInUserId(session?.user?.id ?? null)
+      if (event === 'SIGNED_OUT') {
+        clearProfileUploadDoneUserId()
+        return
+      }
+      if (event === 'INITIAL_SESSION') {
+        if (session?.user) await runAuthCloudSync(session)
+        return
+      }
+      if (event === 'SIGNED_IN' && session?.user) {
+        await runAuthCloudSync(session)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [runAuthCloudSync])
+
+  /** While signed in, push learning profile to the cloud shortly after local state changes. */
+  useEffect(() => {
+    const client = getSupabaseClient()
+    if (!client) return
+    let timer: number | undefined
+    const tick = async () => {
+      const {
+        data: { session },
+      } = await client.auth.getSession()
+      if (!session?.user?.id) return
+      const up = await uploadLearningProfileWithLocalMeta()
+      if (up.ok) setProfileUploadDoneUserId(session.user.id)
+    }
+    const schedule = () => {
+      if (timer) window.clearTimeout(timer)
+      timer = window.setTimeout(() => void tick(), 2500)
+    }
+    schedule()
+    return () => {
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [persisted])
+
+  useEffect(() => {
+    const client = getSupabaseClient()
+    if (!client) return
+    if (meta.accountMagicLinkSentAt) return
+
+    const seen = meta.first20Seen
+    const notNow = meta.accountSaveNotNowCount ?? 0
+    const shouldPrompt =
+      (notNow === 0 && seen >= 10) ||
+      (notNow === 1 && seen >= 15) ||
+      (notNow === 2 && seen >= 20)
+    if (!shouldPrompt) return
+
+    void client.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setSaveProgressOpen(false)
+        return
+      }
+      setSaveProgressWelcomeBack(false)
+      setSaveProgressOpen(true)
+    })
+  }, [meta.first20Seen, meta.accountSaveNotNowCount, meta.accountMagicLinkSentAt])
+
+  useEffect(() => {
+    if (!saveProgressOpen) setSaveProgressWelcomeBack(false)
+  }, [saveProgressOpen])
 
   const [sessionVideoIndex, setSessionVideoIndex] = useState(0)
   const sessionVideoIndexRef = useRef(sessionVideoIndex)
@@ -746,6 +857,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (saved && words.some((w) => w.word_id === saved)) return saved
     return pickRandomWord(words).word_id
   })
+  /** Signed URL from `redeem-gift` when opening `?g=<token>` (same clip as sender). */
+  const [giftPlayback, setGiftPlayback] = useState<{ wordId: string; url: string } | null>(null)
   const currentWord = useMemo(() => {
     const found = words.find((w) => w.word_id === currentWordId)
     if (found) return found
@@ -763,17 +876,62 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [currentWordId])
 
   useEffect(() => {
+    const onReplace = () => {
+      setPersisted(loadPersistedState())
+      const id = loadCurrentWordId()
+      if (id && wordsRef.current.some((w) => w.word_id === id)) {
+        setCurrentWordId(id)
+      }
+    }
+    window.addEventListener(PERSISTED_STATE_REPLACED_EVENT, onReplace)
+    return () => window.removeEventListener(PERSISTED_STATE_REPLACED_EVENT, onReplace)
+  }, [])
+
+  useEffect(() => {
     if (!words.length) return
     const params = new URLSearchParams(window.location.search)
-    const w = params.get('w')?.trim()
+    const path = window.location.pathname || '/'
+    const pathGiftMatch = path.match(/^\/g\/([0-9a-f]{32})\/?$/i)
+    const g = (params.get('g')?.trim() ?? pathGiftMatch?.[1] ?? '').trim()
+    const w = params.get('w')?.trim() ?? ''
+    const clearQuery = () => {
+      const p = window.location.pathname || '/'
+      const hasSearch = window.location.search.length > 1
+      const isGiftPath = /^\/g\/[0-9a-f]{32}\/?$/i.test(p)
+      if (isGiftPath || hasSearch) {
+        window.history.replaceState({}, '', '/' + window.location.hash)
+      }
+    }
+
+    const giftTokenRe = /^[0-9a-f]{32}$/i
+    if (g && giftTokenRe.test(g)) {
+      void redeemGiftToken(g).then((r) => {
+        if (!r.ok) {
+          clearQuery()
+          return
+        }
+        setGiftPlayback({ wordId: r.word_id, url: r.signed_url })
+        if (words.some((x) => x.word_id === r.word_id)) {
+          setCurrentWordId(r.word_id)
+        }
+        clearQuery()
+      })
+      return
+    }
+
     if (w && words.some((x) => x.word_id === w)) {
       setCurrentWordId(w)
     }
-    if (window.location.search) {
-      const path = window.location.pathname || '/'
-      window.history.replaceState({}, '', path + window.location.hash)
-    }
+    clearQuery()
   }, [words])
+
+  useEffect(() => {
+    setGiftPlayback((prev) => {
+      if (!prev) return null
+      if (prev.wordId !== currentWordId) return null
+      return prev
+    })
+  }, [currentWordId])
 
   const currentWordRef = useRef(currentWord)
   currentWordRef.current = currentWord
@@ -804,6 +962,11 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   /** Signed Storage URL, or static `video_url` when no YouTube backup is configured. */
   const [nativePlaybackSrc, setNativePlaybackSrc] = useState<string | null>(null)
+
+  const displayNativePlaybackSrc = useMemo(() => {
+    if (giftPlayback?.wordId === currentWord.word_id) return giftPlayback.url
+    return nativePlaybackSrc
+  }, [giftPlayback, currentWord.word_id, nativePlaybackSrc])
 
   useEffect(() => {
     setYoutubeFallback(false)
@@ -883,8 +1046,41 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   const elapsedMsRef = useRef(0)
   const sessionStartMsRef = useRef<number>(Date.now())
+  const sessionWordsSeenRef = useRef<Set<string>>(new Set())
+  const sessionSummaryLastFlushRef = useRef(0)
   const rafRef = useRef<number | null>(null)
   const lastRenderMsRef = useRef(0)
+
+  useEffect(() => {
+    sessionWordsSeenRef.current.add(currentWordId)
+  }, [currentWordId])
+
+  const currentWordIdForSessionRef = useRef(currentWordId)
+  currentWordIdForSessionRef.current = currentWordId
+
+  useEffect(() => {
+    const flush = () => {
+      const now = Date.now()
+      if (now - sessionSummaryLastFlushRef.current < 4000) return
+      sessionSummaryLastFlushRef.current = now
+      recordSessionSummaryFireAndForget({
+        started_at: sessionStartMsRef.current,
+        ended_at: now,
+        word_ids: [...sessionWordsSeenRef.current],
+      })
+      sessionStartMsRef.current = now
+      sessionWordsSeenRef.current = new Set([currentWordIdForSessionRef.current])
+    }
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') flush()
+    }
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [])
 
   const gestureRef = useRef<HTMLDivElement>(null)
   const feedRootRef = useRef<HTMLDivElement>(null)
@@ -920,6 +1116,28 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const tapPrimerConsumedRef = useRef(false)
   const [videoReady, setVideoReady] = useState(false)
   const [shareSheetOpen, setShareSheetOpen] = useState(false)
+
+  const dismissSaveProgress = useCallback(() => {
+    setSaveProgressOpen(false)
+    setPersisted((p) => ({
+      ...p,
+      meta: {
+        ...p.meta,
+        accountSaveNotNowCount: Math.min(2, (p.meta.accountSaveNotNowCount ?? 0) + 1),
+      },
+    }))
+  }, [])
+
+  const recordMagicLinkSent = useCallback(() => {
+    setPersisted((p) => ({
+      ...p,
+      meta: { ...p.meta, accountMagicLinkSentAt: Date.now() },
+    }))
+  }, [])
+
+  const closeSaveProgressAfterSuccess = useCallback(() => {
+    setSaveProgressOpen(false)
+  }, [])
 
   useEffect(() => {
     setShareSheetOpen(false)
@@ -1470,8 +1688,23 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const displayedLikeCount =
     backendCountsOk && likeCount !== null ? Math.max(likeCount, liked ? 1 : 0) : null
 
+  const supabaseClient = getSupabaseClient()
+
   return (
     <div ref={feedRootRef} className="relative h-dvh w-full overflow-hidden bg-black">
+      {supabaseClient && !signedInUserId ? (
+        <button
+          type="button"
+          onClick={() => {
+            setSaveProgressWelcomeBack(true)
+            setSaveProgressOpen(true)
+          }}
+          className="pointer-events-auto fixed right-3 top-[max(0.6rem,env(safe-area-inset-top))] z-[58] rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 shadow-[0_4px_20px_rgba(0,0,0,0.35)] ring-1 ring-black/10 active:scale-[0.98] active:opacity-95"
+        >
+          Sign in
+        </button>
+      ) : null}
+
       <div
         className="absolute inset-0 z-0"
         style={{ backgroundImage: avatarGradient(currentWord.word_id) }}
@@ -1490,10 +1723,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
             />
           </div>
         ) : needsSignedNativeUrl ? (
-          nativePlaybackSrc ? (
+          displayNativePlaybackSrc ? (
             <video
               key={currentWord.word_id}
-              src={nativePlaybackSrc}
+              src={displayNativePlaybackSrc}
               autoPlay
               muted
               loop
@@ -1821,6 +2054,27 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         word={shareSheetOpen ? currentWord : null}
         onClose={() => setShareSheetOpen(false)}
       />
+
+      <SaveProgressModal
+        open={saveProgressOpen}
+        welcomeBack={saveProgressWelcomeBack}
+        wordsInProgress={countWordsWithSessions(wordStates)}
+        initialEmail={getLastUsedAccountEmail() ?? ''}
+        allowNotNow={(meta.accountSaveNotNowCount ?? 0) < 2}
+        onDismissWithoutAccount={dismissSaveProgress}
+        onMagicLinkSent={recordMagicLinkSent}
+        onCloseAfterSuccess={closeSaveProgressAfterSuccess}
+      />
+
+      {cloudSavedToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[56] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
+        >
+          Signed in — your learning progress is saved to the cloud.
+        </div>
+      ) : null}
     </div>
   )
 }

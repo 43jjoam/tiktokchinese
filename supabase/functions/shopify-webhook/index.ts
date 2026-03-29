@@ -78,7 +78,7 @@ async function sendEmail(to: string, code: string, deckName: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Bestling <noreply@bestling.net>",
+      from: "Chinese Flash <noreply@chineseflash.com>",
       to: [to],
       subject: `Your activation code for ${deckName}`,
       html: `

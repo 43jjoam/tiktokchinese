@@ -1,7 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import {
+  CLOUD_PROFILE_SAVED_EVENT,
+  getAuthEmail,
+  PERSISTED_STATE_REPLACED_EVENT,
+  setLastUsedAccountEmail,
+  setProfileUploadDoneUserId,
+  uploadLearningProfileWithLocalMeta,
+} from '../lib/accountSync'
+import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState } from '../lib/storage'
-import { getActivatedDecks } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
 import { getWordContentKind } from '../lib/wordContentKind'
 import type { WordMetadata } from '../lib/types'
@@ -387,6 +395,11 @@ export default function ProfileTab() {
   const [engageFocusWord, setEngageFocusWord] = useState<WordMetadata | null>(null)
   const [feedWordList, setFeedWordList] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
   const [engagementRev, setEngagementRev] = useState(0)
+  const [storageRev, setStorageRev] = useState(0)
+  const [authEmail, setAuthEmail] = useState<string | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [syncHint, setSyncHint] = useState<string | null>(null)
+  const [cloudSavedBanner, setCloudSavedBanner] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -410,7 +423,45 @@ export default function ProfileTab() {
     return () => window.removeEventListener(ENGAGEMENT_LOCAL_CHANGED_EVENT, bump)
   }, [])
 
-  const persisted = loadPersistedState()
+  useEffect(() => {
+    const bump = () => setStorageRev((n) => n + 1)
+    window.addEventListener(PERSISTED_STATE_REPLACED_EVENT, bump)
+    return () => window.removeEventListener(PERSISTED_STATE_REPLACED_EVENT, bump)
+  }, [])
+
+  useEffect(() => {
+    const onCloudSaved = () => {
+      setCloudSavedBanner(true)
+      window.setTimeout(() => setCloudSavedBanner(false), 14000)
+    }
+    window.addEventListener(CLOUD_PROFILE_SAVED_EVENT, onCloudSaved)
+    return () => window.removeEventListener(CLOUD_PROFILE_SAVED_EVENT, onCloudSaved)
+  }, [])
+
+  useEffect(() => {
+    const client = getSupabaseClient()
+    if (!client) {
+      setAuthEmail(null)
+      setAuthChecked(true)
+      return
+    }
+    void getAuthEmail().then((email) => {
+      setAuthEmail(email)
+      setAuthChecked(true)
+    })
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, session) => {
+      const em = session?.user?.email ?? null
+      setAuthEmail(em)
+      if (em) {
+        setLastUsedAccountEmail(em)
+      }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const persisted = useMemo(() => loadPersistedState(), [storageRev, engagementRev])
   const ws = persisted.wordStates
   const charWords = feedWordList.filter((w) => getWordContentKind(w) === 'character')
   const vocabWords = feedWordList.filter((w) => getWordContentKind(w) === 'vocabulary')
@@ -509,13 +560,91 @@ export default function ProfileTab() {
     [engageTab],
   )
 
+  const onSyncNow = useCallback(async () => {
+    setSyncHint(null)
+    const client = getSupabaseClient()
+    const r = await uploadLearningProfileWithLocalMeta()
+    if (r.ok) {
+      setSyncHint('Saved to your account.')
+      if (client) {
+        const {
+          data: { session },
+        } = await client.auth.getSession()
+        if (session?.user?.id) setProfileUploadDoneUserId(session.user.id)
+      }
+      setStorageRev((x) => x + 1)
+    } else {
+      setSyncHint(r.error)
+    }
+  }, [])
+
+  const supabaseConfigured = Boolean(getSupabaseClient())
+
   return (
     <div className="relative z-10 flex h-dvh flex-col overflow-hidden bg-black">
       <header className="shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        {!authChecked && supabaseConfigured ? (
+          <p className="text-sm text-white/50">Checking account…</p>
+        ) : authEmail ? (
+          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-white/45">Account</div>
+            <p className="mt-1 text-sm text-white/85">Signed in as {authEmail}</p>
+            <p className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-emerald-200/90">
+              <span
+                className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/25 text-[11px] font-bold text-emerald-100"
+                aria-hidden
+              >
+                ✓
+              </span>
+              <span>
+                Cloud backup is on. Progress also updates in the background while you study — use Sync now if you want
+                an immediate upload.
+              </span>
+            </p>
+            {persisted.meta.lastMergedRemoteUpdatedAt ? (
+              <p className="mt-0.5 text-[11px] text-white/40">
+                Last cloud update:{' '}
+                {new Date(persisted.meta.lastMergedRemoteUpdatedAt).toLocaleString(undefined, {
+                  dateStyle: 'short',
+                  timeStyle: 'short',
+                })}
+              </p>
+            ) : null}
+            {syncHint ? <p className="mt-2 text-xs text-emerald-300/95">{syncHint}</p> : null}
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => void onSyncNow()}
+                className="rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white active:bg-white/25"
+              >
+                Sync now
+              </button>
+            </div>
+          </div>
+        ) : supabaseConfigured ? (
+          <p className="text-sm leading-relaxed text-white/55">
+            Not signed in. Use <span className="font-semibold text-white/80">Sign in</span> on the learning tab to save
+            progress across devices.
+          </p>
+        ) : (
+          <p className="text-sm text-white/50">Cloud backup is not configured in this build.</p>
+        )}
+
+        {cloudSavedBanner ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className="mt-3 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-3 text-sm leading-snug text-emerald-50 ring-1 ring-emerald-400/25"
+          >
+            <span className="font-bold text-white">You&apos;re all set.</span> Your memory profile (scores, taps, and
+            progress) was just saved to your account. It will load automatically when you sign in on another device.
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={() => setStatsSheetOpen(true)}
-          className="flex w-full flex-col items-center rounded-2xl py-2 active:bg-white/5"
+          className="mt-3 flex w-full flex-col items-center rounded-2xl py-2 active:bg-white/5"
           aria-label="Open learning progress"
         >
           <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-3xl font-bold shadow-lg ring-2 ring-white/10">

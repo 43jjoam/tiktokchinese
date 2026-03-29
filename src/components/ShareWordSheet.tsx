@@ -17,6 +17,7 @@ import {
   engagementShareTap,
   isNavigatorShareSupported,
   recordLocalShare,
+  resolveShareUrlForWord,
   type ShareSuccessMethod,
 } from '../lib/engagementService'
 
@@ -108,10 +109,27 @@ async function copyTextForShare(text: string): Promise<boolean> {
 export function ShareWordSheet({ open, word, onClose }: Props) {
   const [canWebShare, setCanWebShare] = useState(false)
   const [instagramToast, setInstagramToast] = useState<string | null>(null)
+  const [shareUrl, setShareUrl] = useState('')
 
   useEffect(() => {
     setCanWebShare(isNavigatorShareSupported())
   }, [open])
+
+  useEffect(() => {
+    if (!open || !word) {
+      setShareUrl('')
+      return
+    }
+    let cancelled = false
+    const fallback = buildShareUrl(word.word_id)
+    setShareUrl(fallback)
+    void resolveShareUrlForWord(word).then((u) => {
+      if (!cancelled) setShareUrl(u)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, word])
 
   useEffect(() => {
     if (!open) setInstagramToast(null)
@@ -139,18 +157,18 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
   /** Open share target in the same user gesture (no await before open) so popups are not blocked. */
   const runFacebook = useCallback(() => {
     if (!word) return
-    const pageUrl = buildShareUrl(word.word_id)
+    const pageUrl = shareUrl || buildShareUrl(word.word_id)
     const fbUrl = facebookSharerUrl(pageUrl)
     openExternalUrlInNewTab(fbUrl)
     void (async () => {
       await primeChannel()
       await afterChannel('facebook')
     })()
-  }, [word, primeChannel, afterChannel])
+  }, [word, shareUrl, primeChannel, afterChannel])
 
   const runWhatsApp = useCallback(() => {
     if (!word) return
-    const pageUrl = buildShareUrl(word.word_id)
+    const pageUrl = shareUrl || buildShareUrl(word.word_id)
     const text = buildChallengeShareText(word, pageUrl)
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
     openExternalUrlInNewTab(waUrl)
@@ -158,22 +176,22 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
       await primeChannel()
       await afterChannel('whatsapp')
     })()
-  }, [word, primeChannel, afterChannel])
+  }, [word, shareUrl, primeChannel, afterChannel])
 
   const runSms = useCallback(() => {
     if (!word) return
-    const pageUrl = buildShareUrl(word.word_id)
+    const pageUrl = shareUrl || buildShareUrl(word.word_id)
     const body = buildChallengeShareText(word, pageUrl)
     window.location.href = `sms:?&body=${encodeURIComponent(body)}`
     void (async () => {
       await primeChannel()
       await afterChannel('sms')
     })()
-  }, [word, primeChannel, afterChannel])
+  }, [word, shareUrl, primeChannel, afterChannel])
 
   const runEmail = useCallback(() => {
     if (!word) return
-    const pageUrl = buildShareUrl(word.word_id)
+    const pageUrl = shareUrl || buildShareUrl(word.word_id)
     const subject = `Chinese Flash — ${word.character}`
     const body = buildChallengeShareText(word, pageUrl)
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
@@ -181,7 +199,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
       await primeChannel()
       await afterChannel('email')
     })()
-  }, [word, primeChannel, afterChannel])
+  }, [word, shareUrl, primeChannel, afterChannel])
 
   /**
    * Instagram does not offer a stable web URL to hand off text into feed/DM.
@@ -191,7 +209,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
   const runInstagramPaste = useCallback(() => {
     if (!word) return
     setInstagramToast(null)
-    const url = buildShareUrl(word.word_id)
+    const url = shareUrl || buildShareUrl(word.word_id)
     const text = buildChallengeShareText(word, url)
     void copyTextForShare(text).then((ok) => {
       if (!ok) {
@@ -214,12 +232,12 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
         }
       })()
     })
-  }, [word, primeChannel])
+  }, [word, shareUrl, primeChannel])
 
   const runCopyLink = useCallback(async () => {
     if (!word) return
     await primeChannel()
-    const url = buildShareUrl(word.word_id)
+    const url = shareUrl || buildShareUrl(word.word_id)
     try {
       await navigator.clipboard.writeText(url)
       await engagementShareSuccess(word, 'copy')
@@ -227,11 +245,11 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
       /* */
     }
     close()
-  }, [word, primeChannel, close])
+  }, [word, shareUrl, primeChannel, close])
 
   const runSystemShare = useCallback(async () => {
     if (!word) return
-    const url = buildShareUrl(word.word_id)
+    const url = shareUrl || buildShareUrl(word.word_id)
     try {
       if (typeof navigator.share === 'function') {
         await navigator.share({
@@ -258,7 +276,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
       /* */
     }
     close()
-  }, [word, primeChannel, close])
+  }, [word, shareUrl, primeChannel, close])
 
   return (
     <AnimatePresence>

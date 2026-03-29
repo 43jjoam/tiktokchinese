@@ -1,0 +1,354 @@
+import { getSupabaseClient } from './deckService'
+import {
+  loadCurrentWordId,
+  loadPersistedState,
+  saveCurrentWordId,
+  savePersistedState,
+  type PersistedState,
+} from './storage'
+import type { WordState } from './types'
+
+export const PERSISTED_STATE_REPLACED_EVENT = 'tiktokchinese:persisted-state-replaced'
+
+/** Fired after `user_learning_profiles` upload succeeds (e.g. magic link sign-in). */
+export const CLOUD_PROFILE_SAVED_EVENT = 'tiktokchinese:cloud-profile-saved'
+
+const LAST_ACCOUNT_EMAIL_KEY = 'tiktokchinese_last_account_email'
+/** After sign-in, local progress wins until we successfully upload once for this user id (persists across refresh). */
+const PROFILE_UPLOAD_DONE_USER_ID_KEY = 'tiktokchinese_profile_upload_done_user_id'
+
+export function getProfileUploadDoneUserId(): string | null {
+  try {
+    const id = localStorage.getItem(PROFILE_UPLOAD_DONE_USER_ID_KEY)?.trim()
+    return id || null
+  } catch {
+    return null
+  }
+}
+
+export function setProfileUploadDoneUserId(userId: string): void {
+  try {
+    localStorage.setItem(PROFILE_UPLOAD_DONE_USER_ID_KEY, userId)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearProfileUploadDoneUserId(): void {
+  try {
+    localStorage.removeItem(PROFILE_UPLOAD_DONE_USER_ID_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Email from last successful sign-in — used for one-tap “sync link” without retyping. */
+export function getLastUsedAccountEmail(): string | null {
+  try {
+    const s = localStorage.getItem(LAST_ACCOUNT_EMAIL_KEY)?.trim().toLowerCase()
+    return s && s.includes('@') ? s : null
+  } catch {
+    return null
+  }
+}
+
+export function setLastUsedAccountEmail(email: string | null): void {
+  try {
+    if (!email?.trim()) {
+      localStorage.removeItem(LAST_ACCOUNT_EMAIL_KEY)
+    } else {
+      localStorage.setItem(LAST_ACCOUNT_EMAIL_KEY, email.trim().toLowerCase())
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export function notifyCloudProfileSaved(): void {
+  try {
+    window.dispatchEvent(new CustomEvent(CLOUD_PROFILE_SAVED_EVENT))
+  } catch {
+    /* ignore */
+  }
+}
+
+const PROFILE_V = 1 as const
+
+export type StoredLearningProfilePayload = {
+  v: typeof PROFILE_V
+  persisted: PersistedState
+  currentWordId: string | null
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === 'object' && x !== null && !Array.isArray(x)
+}
+
+function isPersistedState(x: unknown): x is PersistedState {
+  if (!isRecord(x)) return false
+  if (!isRecord(x.wordStates) || !isRecord(x.videoQuality) || !isRecord(x.meta)) return false
+  return true
+}
+
+function normalizeProfilePayload(raw: unknown): StoredLearningProfilePayload | null {
+  if (!isRecord(raw)) return null
+  if (raw.v === PROFILE_V && isPersistedState(raw.persisted)) {
+    return {
+      v: PROFILE_V,
+      persisted: raw.persisted,
+      currentWordId: typeof raw.currentWordId === 'string' ? raw.currentWordId : null,
+    }
+  }
+  /* Legacy: entire blob was PersistedState */
+  if (isPersistedState(raw)) {
+    return {
+      v: PROFILE_V,
+      persisted: raw,
+      currentWordId: null,
+    }
+  }
+  return null
+}
+
+export function countWordsWithSessions(wordStates: Record<string, WordState>): number {
+  return Object.values(wordStates).filter((w) => w.sessionsSeen > 0).length
+}
+
+/** Local study data that should be pushed before pulling remote (avoids wiping anonymous progress). */
+export function localLearningProgressNeedsUploadFirst(): boolean {
+  const local = loadPersistedState()
+  if (countWordsWithSessions(local.wordStates) > 0) return true
+  if (local.meta.first20Seen > 0) return true
+  return false
+}
+
+function buildUploadPayload(): StoredLearningProfilePayload {
+  return {
+    v: PROFILE_V,
+    persisted: loadPersistedState(),
+    currentWordId: loadCurrentWordId(),
+  }
+}
+
+export function notifyPersistedStateReplaced(): void {
+  try {
+    window.dispatchEvent(new CustomEvent(PERSISTED_STATE_REPLACED_EVENT))
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyProfilePayload(p: StoredLearningProfilePayload): void {
+  savePersistedState(p.persisted)
+  if (p.currentWordId?.trim()) {
+    saveCurrentWordId(p.currentWordId.trim())
+  }
+  notifyPersistedStateReplaced()
+}
+
+/** Turn Supabase / SMTP errors into short copy for the sign-in modal (avoid raw API strings). */
+function userFacingOtpEmailError(raw: string): string {
+  const m = raw.toLowerCase()
+  if (m.includes('rate limit') || m.includes('too many requests') || m.includes('over_email_send_rate')) {
+    return 'Please wait a bit, then try again.'
+  }
+  if (m.includes('signups not allowed') || m.includes('signup_disabled')) {
+    return 'New sign-ups are temporarily unavailable. Please try again later.'
+  }
+  if (m.includes('invalid') && m.includes('email')) {
+    return 'That email address could not be used. Check for typos or try another address.'
+  }
+  if (m.includes('redirect') && (m.includes('not allowed') || m.includes('invalid'))) {
+    return 'Sign-in could not start from this page. Open the app from its main site address and try again.'
+  }
+  if (
+    m.includes('error sending') ||
+    m.includes('confirmation email') ||
+    m.includes('magic link') ||
+    m.includes('smtp') ||
+    m.includes('mailer')
+  ) {
+    return 'We could not send the sign-in email. Please try again later.'
+  }
+  return 'Could not send the email. Please try again in a few minutes.'
+}
+
+/**
+ * URL Supabase puts in the magic-link email (`redirect_to`). Must match an entry under
+ * Authentication → URL Configuration → Redirect URLs (e.g. `https://chineseflash.com/**`).
+ * Set `VITE_AUTH_REDIRECT_URL` in production if users hit the site on www, IP, or preview
+ * URLs that are not allow-listed — use your canonical site URL.
+ */
+function getMagicLinkRedirectUrl(): string | undefined {
+  const fromEnv = (import.meta.env.VITE_AUTH_REDIRECT_URL as string | undefined)?.trim()
+  if (fromEnv) return fromEnv
+  if (typeof window === 'undefined') return undefined
+  /* Root only: avoids redirect_to mismatches when the opened path is not in Supabase Redirect URLs. */
+  return `${window.location.origin}/`
+}
+
+export async function sendMagicLink(email: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    return { ok: false, message: 'App is not connected to the cloud yet.' }
+  }
+  const trimmed = email.trim().toLowerCase()
+  if (!trimmed || !trimmed.includes('@')) {
+    return { ok: false, message: 'Enter a valid email address.' }
+  }
+  const redirect = getMagicLinkRedirectUrl()
+  const { error } = await supabase.auth.signInWithOtp({
+    email: trimmed,
+    options: {
+      emailRedirectTo: redirect,
+    },
+  })
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.warn('[sendMagicLink] Supabase Auth error (raw):', error.message, error)
+    }
+    return { ok: false, message: userFacingOtpEmailError(error.message || '') }
+  }
+  return { ok: true }
+}
+
+export async function signOutAccount(): Promise<void> {
+  clearProfileUploadDoneUserId()
+  const supabase = getSupabaseClient()
+  if (!supabase) return
+  await supabase.auth.signOut()
+}
+
+export async function uploadLearningProfileFromLocal(): Promise<
+  { ok: true; updated_at: string } | { ok: false; error: string }
+> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { ok: false, error: 'no_client' }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.user?.id) return { ok: false, error: 'no_session' }
+
+  const body = buildUploadPayload()
+  const { data, error } = await supabase
+    .from('user_learning_profiles')
+    .upsert(
+      {
+        user_id: session.user.id,
+        payload: body as unknown as Record<string, unknown>,
+      },
+      { onConflict: 'user_id' },
+    )
+    .select('updated_at')
+    .single()
+
+  if (error) {
+    return { ok: false, error: error.message }
+  }
+  if (!data?.updated_at) {
+    return { ok: false, error: 'no_timestamp' }
+  }
+  return { ok: true, updated_at: data.updated_at as string }
+}
+
+/** Upload then stamp `lastMergedRemoteUpdatedAt` so local ↔ cloud stay aligned. */
+export async function uploadLearningProfileWithLocalMeta(): Promise<
+  { ok: true; updated_at: string } | { ok: false; error: string }
+> {
+  const up = await uploadLearningProfileFromLocal()
+  if (!up.ok) return up
+  const next = loadPersistedState()
+  savePersistedState({
+    ...next,
+    meta: {
+      ...next.meta,
+      lastMergedRemoteUpdatedAt: up.updated_at,
+      accountMagicLinkSentAt: undefined,
+      accountSaveNotNowCount: 0,
+    },
+  })
+  notifyPersistedStateReplaced()
+  return up
+}
+
+/**
+ * Prefer local until the first successful upload after sign-in for this user id; then merge remote when newer.
+ */
+export async function syncCloudProfileAfterAuth(userId: string): Promise<{
+  uploaded: boolean
+  merged: boolean
+  uploadError?: string
+}> {
+  const uploadDone = getProfileUploadDoneUserId() === userId
+  const localFirst = !uploadDone && localLearningProgressNeedsUploadFirst()
+
+  if (localFirst) {
+    const up = await uploadLearningProfileWithLocalMeta()
+    if (!up.ok) {
+      return { uploaded: false, merged: false, uploadError: up.error }
+    }
+    setProfileUploadDoneUserId(userId)
+    return { uploaded: true, merged: false }
+  }
+
+  const merged = await mergeRemoteProfileIfNewer()
+  return { uploaded: false, merged }
+}
+
+export async function fetchRemoteLearningProfile(): Promise<
+  { payload: StoredLearningProfilePayload; updated_at: string } | null
+> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return null
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.user?.id) return null
+
+  const { data, error } = await supabase
+    .from('user_learning_profiles')
+    .select('payload, updated_at')
+    .eq('user_id', session.user.id)
+    .maybeSingle()
+
+  if (error || !data?.payload) return null
+  const normalized = normalizeProfilePayload(data.payload)
+  if (!normalized) return null
+  return { payload: normalized, updated_at: data.updated_at as string }
+}
+
+/**
+ * If the server copy is newer than `local.meta.lastMergedRemoteUpdatedAt`, replace local storage and notify.
+ */
+export async function mergeRemoteProfileIfNewer(): Promise<boolean> {
+  const local = loadPersistedState()
+  const remote = await fetchRemoteLearningProfile()
+  if (!remote) return false
+
+  const prev = local.meta.lastMergedRemoteUpdatedAt ?? ''
+  if (prev && remote.updated_at <= prev) {
+    return false
+  }
+
+  applyProfilePayload(remote.payload)
+  const next = loadPersistedState()
+  savePersistedState({
+    ...next,
+    meta: {
+      ...next.meta,
+      lastMergedRemoteUpdatedAt: remote.updated_at,
+      accountSaveNotNowCount: 0,
+    },
+  })
+  notifyPersistedStateReplaced()
+  return true
+}
+
+export async function getAuthEmail(): Promise<string | null> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return null
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  return session?.user?.email ?? null
+}
