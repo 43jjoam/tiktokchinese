@@ -9,7 +9,10 @@ let supabase: SupabaseClient | null = null
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      flowType: 'pkce',
+      /* Implicit magic-link flow: works when the user opens the email in another app (e.g. Outlook)
+       * or WebView. PKCE requires the code_verifier in the *same* browser that called signInWithOtp,
+       * which often fails for mobile email clients. */
+      flowType: 'implicit',
       detectSessionInUrl: true,
       persistSession: true,
     },

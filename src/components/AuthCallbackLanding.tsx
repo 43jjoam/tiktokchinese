@@ -46,15 +46,6 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
       goHome()
     }
 
-    const trySession = () => {
-      void client.auth.getSession().then(({ data: { session } }) => {
-        if (cancelled) return
-        if (session?.user) finishOk()
-      })
-    }
-
-    trySession()
-
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((event, session) => {
@@ -64,17 +55,40 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
       }
     })
 
+    void (async () => {
+      try {
+        const { error: initErr } = await client.auth.initialize()
+        if (cancelled) return
+        if (initErr) {
+          setDetail(initErr.message)
+          setPhase('error')
+          return
+        }
+        const {
+          data: { session },
+        } = await client.auth.getSession()
+        if (!cancelled && session?.user) finishOk()
+      } catch (e) {
+        if (!cancelled) {
+          setDetail(e instanceof Error ? e.message : 'Sign-in failed.')
+          setPhase('error')
+        }
+      }
+    })()
+
     const t = window.setTimeout(() => {
       if (cancelled || completedRef.current) return
       void client.auth.getSession().then(({ data: { session } }) => {
         if (cancelled || completedRef.current) return
         if (session?.user) finishOk()
         else {
-          setDetail('We could not complete sign-in. Try the link again or request a new email from the app.')
+          setDetail(
+            'We could not complete sign-in. Request a new link from the app and open it in Safari or Chrome if this keeps happening.',
+          )
           setPhase('error')
         }
       })
-    }, 12000)
+    }, 20000)
 
     return () => {
       cancelled = true
