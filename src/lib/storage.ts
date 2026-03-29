@@ -20,6 +20,8 @@ export type AppMeta = {
   accountMagicLinkSentAt?: number
   /** ISO timestamp from `user_learning_profiles.updated_at` after last merge or upload */
   lastMergedRemoteUpdatedAt?: string | null
+  /** Supabase `user.id` that `lastMergedRemoteUpdatedAt` refers to — avoids skipping merge for the wrong account */
+  lastCloudProfileUserId?: string | null
 }
 
 export type PersistedState = {
@@ -28,13 +30,16 @@ export type PersistedState = {
   meta: AppMeta
 }
 
-const defaultMeta: AppMeta = {
+/** Fresh study meta (no cloud cursor). Exported for account reset on sign-in user switch. */
+export const DEFAULT_STUDY_META: AppMeta = {
   sessionsServed: 0,
   first20Seen: 0,
   first20Tapped: 0,
   alphaFrozen: false,
   alphaValue: 1.0,
 }
+
+const defaultMeta = DEFAULT_STUDY_META
 
 export function loadCurrentWordId(): string | null {
   try {
@@ -47,6 +52,14 @@ export function loadCurrentWordId(): string | null {
 export function saveCurrentWordId(wordId: string) {
   try {
     localStorage.setItem(KEY_CURRENT_WORD_ID, wordId)
+  } catch {
+    // ignore
+  }
+}
+
+export function clearCurrentWordId(): void {
+  try {
+    localStorage.removeItem(KEY_CURRENT_WORD_ID)
   } catch {
     // ignore
   }

@@ -807,7 +807,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     stripSupabaseOAuthParamsFromUrl()
     if (user.email) setLastUsedAccountEmail(user.email)
     const r = await syncCloudProfileAfterAuth(user.id)
-    if (r.uploaded) {
+    if (r.uploaded || r.merged) {
       setSaveProgressOpen(false)
       notifyCloudProfileSaved()
       setCloudSavedToast(true)

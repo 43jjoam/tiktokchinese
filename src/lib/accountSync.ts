@@ -1,5 +1,7 @@
 import { getSupabaseClient } from './deckService'
 import {
+  clearCurrentWordId,
+  DEFAULT_STUDY_META,
   loadCurrentWordId,
   loadPersistedState,
   saveCurrentWordId,
@@ -284,12 +286,17 @@ export async function uploadLearningProfileWithLocalMeta(): Promise<
 > {
   const up = await uploadLearningProfileFromLocal()
   if (!up.ok) return up
+  const supabase = getSupabaseClient()
   const next = loadPersistedState()
+  const uid = supabase
+    ? ((await supabase.auth.getSession()).data.session?.user?.id ?? '')
+    : ''
   savePersistedState({
     ...next,
     meta: {
       ...next.meta,
       lastMergedRemoteUpdatedAt: up.updated_at,
+      lastCloudProfileUserId: uid || next.meta.lastCloudProfileUserId,
       accountMagicLinkSentAt: undefined,
       accountSaveNotNowCount: 0,
     },
@@ -300,12 +307,63 @@ export async function uploadLearningProfileWithLocalMeta(): Promise<
 
 /**
  * Prefer local until the first successful upload after sign-in for this user id; then merge remote when newer.
+ *
+ * Binds `lastMergedRemoteUpdatedAt` to `lastCloudProfileUserId` so a cursor from another account or browser
+ * profile cannot block downloading this user's cloud row (otherwise the feed stays "new" while Auth shows
+ * the signed-in email).
  */
 export async function syncCloudProfileAfterAuth(userId: string): Promise<{
   uploaded: boolean
   merged: boolean
   uploadError?: string
 }> {
+  let local = loadPersistedState()
+  const prevCloudUid = local.meta.lastCloudProfileUserId
+
+  if (prevCloudUid && prevCloudUid !== userId) {
+    const remote = await fetchRemoteLearningProfile()
+    if (remote) {
+      applyProfilePayload(remote.payload)
+      const next = loadPersistedState()
+      savePersistedState({
+        ...next,
+        meta: {
+          ...next.meta,
+          lastMergedRemoteUpdatedAt: remote.updated_at,
+          lastCloudProfileUserId: userId,
+          accountSaveNotNowCount: 0,
+        },
+      })
+      notifyPersistedStateReplaced()
+      setProfileUploadDoneUserId(userId)
+      return { uploaded: false, merged: true }
+    }
+    savePersistedState({
+      wordStates: {},
+      videoQuality: {},
+      meta: {
+        ...DEFAULT_STUDY_META,
+        lastCloudProfileUserId: userId,
+        accountMagicLinkSentAt: local.meta.accountMagicLinkSentAt,
+        accountSaveNotNowCount: local.meta.accountSaveNotNowCount,
+      },
+    })
+    clearCurrentWordId()
+    notifyPersistedStateReplaced()
+    local = loadPersistedState()
+  }
+
+  if (local.meta.lastMergedRemoteUpdatedAt && !local.meta.lastCloudProfileUserId) {
+    savePersistedState({
+      ...local,
+      meta: {
+        ...local.meta,
+        lastMergedRemoteUpdatedAt: undefined,
+      },
+    })
+    local = loadPersistedState()
+  }
+
   const uploadDone = getProfileUploadDoneUserId() === userId
   const localFirst = !uploadDone && localLearningProgressNeedsUploadFirst()
 
@@ -318,7 +376,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<{
     return { uploaded: true, merged: false }
   }
 
-  const merged = await mergeRemoteProfileIfNewer()
+  const merged = await mergeRemoteProfileIfNewer(userId)
   return { uploaded: false, merged }
 }
 
@@ -344,16 +402,24 @@ export async function fetchRemoteLearningProfile(): Promise<
   return { payload: normalized, updated_at: data.updated_at as string }
 }
 
+function remoteIsNotNewerThanCursor(remoteUpdatedAt: string, localCursor: string): boolean {
+  const r = Date.parse(remoteUpdatedAt)
+  const l = Date.parse(localCursor)
+  if (!Number.isNaN(r) && !Number.isNaN(l)) return r <= l
+  return remoteUpdatedAt <= localCursor
+}
+
 /**
- * If the server copy is newer than `local.meta.lastMergedRemoteUpdatedAt`, replace local storage and notify.
+ * If the server copy is newer than `local.meta.lastMergedRemoteUpdatedAt` (for this user), replace local storage and notify.
  */
-export async function mergeRemoteProfileIfNewer(): Promise<boolean> {
+export async function mergeRemoteProfileIfNewer(expectedUserId: string): Promise<boolean> {
   const local = loadPersistedState()
   const remote = await fetchRemoteLearningProfile()
   if (!remote) return false
 
   const prev = local.meta.lastMergedRemoteUpdatedAt ?? ''
-  if (prev && remote.updated_at <= prev) {
+  const boundUid = local.meta.lastCloudProfileUserId
+  if (prev && boundUid === expectedUserId && remoteIsNotNewerThanCursor(remote.updated_at, prev)) {
     return false
   }
 
@@ -364,6 +430,7 @@ export async function mergeRemoteProfileIfNewer(): Promise<boolean> {
     meta: {
       ...next.meta,
       lastMergedRemoteUpdatedAt: remote.updated_at,
+      lastCloudProfileUserId: expectedUserId,
       accountSaveNotNowCount: 0,
     },
   })
