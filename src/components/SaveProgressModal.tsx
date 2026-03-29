@@ -4,7 +4,7 @@ import { sendMagicLink } from '../lib/accountSync'
 
 type Props = {
   open: boolean
-  /** Corner “Sign in” flow: different copy and button labels. */
+  /** “Welcome back” copy when we already know their email (e.g. last session). */
   welcomeBack?: boolean
   /** Words the learner has started (sessions in progress). */
   wordsInProgress: number

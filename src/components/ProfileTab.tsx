@@ -623,8 +623,8 @@ export default function ProfileTab() {
           </div>
         ) : supabaseConfigured ? (
           <p className="text-sm leading-relaxed text-white/55">
-            Not signed in. Use <span className="font-semibold text-white/80">Sign in</span> on the learning tab to save
-            progress across devices.
+            Not signed in. Tap <span className="font-semibold text-white/80">Save progress</span> on the learning tab to
+            keep progress across devices.
           </p>
         ) : (
           <p className="text-sm text-white/50">Cloud backup is not configured in this build.</p>

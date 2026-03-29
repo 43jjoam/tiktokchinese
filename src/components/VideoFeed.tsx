@@ -697,6 +697,46 @@ type VideoFeedProps = {
   keyboardShortcutsActive?: boolean
 }
 
+/**
+ * Magic-link / OAuth PKCE returns `?code=` (and `state`). Our gift/deep-link effect used to call
+ * `replaceState` and drop the query before `@supabase/supabase-js` exchanged the code — session
+ * never stuck and the corner CTA stayed visible.
+ */
+function urlHasSupabaseAuthCallback(): boolean {
+  const search = window.location.search
+  if (search.length > 1) {
+    if (/(^|[?&])code=/.test(search)) return true
+    if (/(^|[?&])error=/.test(search)) return true
+  }
+  const hash = window.location.hash.replace(/^#/, '')
+  if (!hash) return false
+  return (
+    hash.includes('access_token=') ||
+    hash.includes('refresh_token=') ||
+    /(^|[?&#])code=/.test(hash)
+  )
+}
+
+function stripSupabaseOAuthParamsFromUrl(): void {
+  try {
+    const u = new URL(window.location.href)
+    if (u.search.length <= 1) return
+    const keys = ['code', 'state', 'error', 'error_description', 'error_code']
+    let changed = false
+    for (const k of keys) {
+      if (u.searchParams.has(k)) {
+        u.searchParams.delete(k)
+        changed = true
+      }
+    }
+    if (!changed) return
+    const qs = u.searchParams.toString()
+    window.history.replaceState({}, '', u.pathname + (qs ? `?${qs}` : '') + u.hash)
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedProps) {
   /** Chinese Characters 1 by default; + purchased decks (e.g. HSK 1) after activation. */
   const [words, setWords] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
@@ -750,7 +790,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   const [persisted, setPersisted] = useState(() => loadPersistedState())
   const [saveProgressOpen, setSaveProgressOpen] = useState(false)
-  /** True when opened from corner Sign in — “Welcome back” copy and flow. */
+  /** True when opened from “Welcome back” entry (e.g. last-used email hint) — distinct modal copy. */
   const [saveProgressWelcomeBack, setSaveProgressWelcomeBack] = useState(false)
   const [cloudSavedToast, setCloudSavedToast] = useState(false)
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
@@ -764,6 +804,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const runAuthCloudSync = useCallback(async (session: Session) => {
     const user = session.user
     if (!user?.id) return
+    stripSupabaseOAuthParamsFromUrl()
     if (user.email) setLastUsedAccountEmail(user.email)
     const r = await syncCloudProfileAfterAuth(user.id)
     if (r.uploaded) {
@@ -840,7 +881,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         setSaveProgressOpen(false)
         return
       }
-      setSaveProgressWelcomeBack(false)
+      setSaveProgressWelcomeBack(Boolean(getLastUsedAccountEmail()))
       setSaveProgressOpen(true)
     })
   }, [meta.first20Seen, meta.accountSaveNotNowCount, meta.accountMagicLinkSentAt])
@@ -895,6 +936,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     const g = (params.get('g')?.trim() ?? pathGiftMatch?.[1] ?? '').trim()
     const w = params.get('w')?.trim() ?? ''
     const clearQuery = () => {
+      if (urlHasSupabaseAuthCallback()) return
       const p = window.location.pathname || '/'
       const hasSearch = window.location.search.length > 1
       const isGiftPath = /^\/g\/[0-9a-f]{32}\/?$/i.test(p)
@@ -1696,12 +1738,12 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         <button
           type="button"
           onClick={() => {
-            setSaveProgressWelcomeBack(true)
+            setSaveProgressWelcomeBack(Boolean(getLastUsedAccountEmail()))
             setSaveProgressOpen(true)
           }}
           className="pointer-events-auto fixed right-3 top-[max(0.6rem,env(safe-area-inset-top))] z-[58] rounded-2xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-900 shadow-[0_4px_20px_rgba(0,0,0,0.35)] ring-1 ring-black/10 active:scale-[0.98] active:opacity-95"
         >
-          Sign in
+          Save progress
         </button>
       ) : null}
 
