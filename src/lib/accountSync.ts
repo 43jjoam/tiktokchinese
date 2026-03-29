@@ -1,3 +1,4 @@
+import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
 import { getSupabaseClient } from './deckService'
 import {
   clearCurrentWordId,
@@ -179,7 +180,7 @@ function userFacingOtpEmailError(raw: string): string {
  * URL Supabase puts in the magic-link email (`redirect_to`). Must match an entry under
  * Authentication → URL Configuration → Redirect URLs (e.g. `https://chineseflash.com/**`).
  * Set `VITE_AUTH_REDIRECT_URL` in production if users hit the site on www, IP, or preview
- * URLs that are not allow-listed — use your canonical site URL.
+ * URLs that are not allow-listed — use your canonical site URL including `/auth/callback/`.
  */
 function getMagicLinkRedirectUrl(): string | undefined {
   const withTrailingSlash = (base: string, pathname: string) => {
@@ -196,8 +197,8 @@ function getMagicLinkRedirectUrl(): string | undefined {
     }
   }
   if (typeof window === 'undefined') return undefined
-  /* Root only: avoids redirect_to mismatches when the opened path is not in Supabase Redirect URLs. */
-  return withTrailingSlash(window.location.origin, '/')
+  /* Dedicated path: App shows AuthCallbackLanding first, then replaces URL with `/`. */
+  return withTrailingSlash(window.location.origin, `/${AUTH_CALLBACK_SEGMENT}`)
 }
 
 export async function sendMagicLink(
