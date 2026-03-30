@@ -16,7 +16,13 @@
     "words:seed-sql": "node scripts/generate-words-seed.mjs",
     "words:metadata-seed-sql": "tsx scripts/generate-word-metadata-seed.ts",
     "words:tag-pos-openai": "tsx scripts/tag-pos-openai.ts",
-    "configure:supabase-auth-smtp": "node scripts/configure-supabase-auth-smtp-resend.mjs"
+    "configure:supabase-auth-smtp": "node scripts/configure-supabase-auth-smtp-resend.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:prepush": "vitest run && playwright test",
+    "test:load": "node scripts/run-k6-engagement.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",
@@ -34,6 +40,9 @@
     "tailwindcss": "^3.4.10",
     "tsx": "^4.21.0",
     "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+    "vite": "^5.4.2",
+    "@playwright/test": "^1.51.0",
+    "jsdom": "^26.0.0",
+    "vitest": "^3.0.9"
   }
 }

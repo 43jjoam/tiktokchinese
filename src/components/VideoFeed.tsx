@@ -1977,7 +1977,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.25 }}
-            className="absolute left-1/2 top-10 z-20 -translate-x-1/2 text-center pointer-events-none"
+            className="pointer-events-none absolute left-1/2 z-20 -translate-x-1/2 text-center top-[max(0.75rem,env(safe-area-inset-top))] sm:top-10"
           >
             <div className="inline-block rounded-2xl bg-black/20 px-6 py-3 backdrop-blur-sm">
               <div className="text-4xl font-semibold tracking-tight text-white">

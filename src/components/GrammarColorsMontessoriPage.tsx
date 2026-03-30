@@ -1,39 +1,90 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import React, { useState } from 'react'
-import type { PosTag } from '../lib/posTag'
-import type { WordMetadata } from '../lib/types'
-import {
-  montessoriHexForPosTag,
-  montessoriTileTextClassForHex,
-  POS_TAG_MONTESSORI_LEGEND,
-  posTagDisplayLabel,
-} from '../lib/posTagMontessori'
+import React, { useMemo, useState } from 'react'
+import { resolvePosTag } from '../lib/inferPosTag'
+import { POS_TAGS, type PosTag } from '../lib/posTag'
+import type { WordMetadata, WordState } from '../lib/types'
+import { POS_TAG_MONTESSORI_LEGEND, posTagDisplayLabel } from '../lib/posTagMontessori'
 import {
   GRAMMAR_PAGE_FOOTER_LINKS,
   GRAMMAR_PAGE_INTRO_LEAD,
   GRAMMAR_PAGE_INTRO_TITLE,
   POS_TAG_ROLE_IN_CHINESE,
 } from '../lib/posTagMontessoriExplainer'
+import { sortWordsByCubeTier } from '../lib/cubeVaultSort'
+import { MasteryCube } from './MasteryCube'
+
+type Bands = {
+  mastered: WordMetadata[]
+  inProgress: WordMetadata[]
+  newWords: WordMetadata[]
+  flat: WordMetadata[]
+}
 
 type Props = {
-  achievedWordsByPosTag: Record<PosTag, WordMetadata[]>
+  feedWordList: WordMetadata[]
+  wordStates: Record<string, WordState | undefined>
+  onPickVaultWord: (word: WordMetadata, browseList: WordMetadata[]) => void
   onBack: () => void
 }
 
-function PosTagTileBoard({
+function bandWordsForFeed(
+  feedWordList: WordMetadata[],
+  wordStates: Record<string, WordState | undefined>,
+): Record<PosTag, Bands> {
+  const out = {} as Record<PosTag, Bands>
+  for (const tag of POS_TAGS) {
+    const inTag = feedWordList.filter((w) => resolvePosTag(w) === tag)
+    const mastered: WordMetadata[] = []
+    const inProgress: WordMetadata[] = []
+    const newWords: WordMetadata[] = []
+    for (const w of inTag) {
+      const st = wordStates[w.word_id]
+      const mScore = st?.mScore ?? 0
+      const isMastered = Boolean(st?.masteryConfirmed) || mScore >= 5
+      if (isMastered) mastered.push(w)
+      else if (mScore === 0) newWords.push(w)
+      else inProgress.push(w)
+    }
+    const sortZh = (a: WordMetadata, b: WordMetadata) =>
+      a.character.localeCompare(b.character, 'zh-Hans-CN')
+    mastered.sort(sortZh)
+    inProgress.sort(sortZh)
+    newWords.sort(sortZh)
+    const flat = sortWordsByCubeTier([...mastered, ...inProgress, ...newWords], wordStates)
+    out[tag] = {
+      mastered,
+      inProgress,
+      newWords,
+      flat,
+    }
+  }
+  return out
+}
+
+function PosTagCubeBoard({
   tag,
-  words,
+  bands,
+  wordStates,
+  onPickVaultWord,
   onBack,
 }: {
   tag: PosTag
-  words: WordMetadata[]
+  bands: Bands
+  wordStates: Record<string, WordState | undefined>
+  onPickVaultWord: (word: WordMetadata, browseList: WordMetadata[]) => void
   onBack: () => void
 }) {
-  const hex = montessoriHexForPosTag(tag)
   const label = posTagDisplayLabel(tag)
-  const textCls = montessoriTileTextClassForHex(hex)
-  const n = words.length
+  const n = bands.flat.length
   const roleLine = POS_TAG_ROLE_IN_CHINESE[tag]
+
+  const sections = (
+    [
+      { title: 'Mastered', words: bands.mastered },
+      { title: 'In progress', words: bands.inProgress },
+      { title: 'New', words: bands.newWords },
+    ] as const
+  ).filter((s) => s.words.length > 0)
 
   return (
     <motion.div
@@ -66,7 +117,7 @@ function PosTagTileBoard({
         </button>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-bold text-white">{label}</h2>
-          <p className="truncate text-[11px] tabular-nums text-white/50">{n} collected</p>
+          <p className="truncate text-[11px] tabular-nums text-white/50">{n} in your decks</p>
         </div>
       </div>
 
@@ -77,34 +128,47 @@ function PosTagTileBoard({
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-6 text-center">
             <p className="text-3xl font-bold tabular-nums text-white/80">0</p>
             <p className="mt-2 text-sm leading-relaxed text-white/50">
-              Swipe left or right on a {label.toLowerCase()} in the feed or a saved clip to add tiles.
+              No {label.toLowerCase()} in your activated decks yet.
             </p>
           </div>
         ) : (
-          <ul
-            className="grid grid-cols-4 gap-2 p-0 sm:grid-cols-5"
-            aria-label={`${n} tiles for ${label}`}
-          >
-            {words.map((w) => (
-              <li key={w.word_id} className="list-none">
-                <div
-                  className={`flex aspect-square select-none items-center justify-center rounded-xl text-2xl font-semibold ring-1 ring-black/30 sm:text-[1.65rem] ${textCls}`}
-                  style={{ backgroundColor: hex }}
-                  title={`${w.character} · ${w.pinyin}`}
-                >
-                  {w.character}
+          <div className="space-y-8" aria-label={`${n} cubes for ${label}`}>
+            {sections.map((sec) => (
+              <section key={sec.title}>
+                <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                  {sec.title}
+                </h3>
+                <div className="grid grid-cols-3 justify-items-center gap-x-2 gap-y-4 min-[400px]:grid-cols-4">
+                  {sec.words.map((w) => (
+                    <MasteryCube
+                      key={w.word_id}
+                      word={w}
+                      wordState={wordStates[w.word_id]}
+                      onClick={() => onPickVaultWord(w, bands.flat)}
+                    />
+                  ))}
                 </div>
-              </li>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </div>
     </motion.div>
   )
 }
 
-export function GrammarColorsMontessoriPage({ achievedWordsByPosTag, onBack }: Props) {
+export function GrammarColorsMontessoriPage({
+  feedWordList,
+  wordStates,
+  onPickVaultWord,
+  onBack,
+}: Props) {
   const [openTilesFor, setOpenTilesFor] = useState<PosTag | null>(null)
+
+  const bandsByTag = useMemo(
+    () => bandWordsForFeed(feedWordList, wordStates),
+    [feedWordList, wordStates],
+  )
 
   return (
     <>
@@ -153,20 +217,19 @@ export function GrammarColorsMontessoriPage({ achievedWordsByPosTag, onBack }: P
           <section className="mt-8">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">Each type</h2>
             <p className="mt-2 text-[12px] leading-relaxed text-white/45">
-              The number is how many words of that type you finished with a full swipe. Tap a row for tiles.
+              Tap a row for cubes (mastered, in progress, then new). Tap a cube to open its lesson video.
             </p>
             <ul className="mt-4 space-y-3 p-0">
               {POS_TAG_MONTESSORI_LEGEND.map(({ tag, label, hex }) => {
                 const role = POS_TAG_ROLE_IN_CHINESE[tag]
-                const words = achievedWordsByPosTag[tag]
-                const n = words.length
+                const n = bandsByTag[tag].flat.length
                 return (
                   <li key={tag} className="list-none">
                     <button
                       type="button"
                       onClick={() => setOpenTilesFor(tag)}
                       className="w-full rounded-xl border border-white/10 bg-white/[0.04] p-3.5 text-left transition-colors active:bg-white/[0.08]"
-                      aria-label={`${label}, ${n} tiles. Open tile board.`}
+                      aria-label={`${label}, ${n} words. Open cube vault.`}
                     >
                       <div className="flex items-start gap-3">
                         <span
@@ -225,10 +288,12 @@ export function GrammarColorsMontessoriPage({ achievedWordsByPosTag, onBack }: P
 
       <AnimatePresence>
         {openTilesFor != null ? (
-          <PosTagTileBoard
+          <PosTagCubeBoard
             key={openTilesFor}
             tag={openTilesFor}
-            words={achievedWordsByPosTag[openTilesFor]}
+            bands={bandsByTag[openTilesFor]}
+            wordStates={wordStates}
+            onPickVaultWord={onPickVaultWord}
             onBack={() => setOpenTilesFor(null)}
           />
         ) : null}

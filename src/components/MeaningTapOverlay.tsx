@@ -1,8 +1,10 @@
 import React from 'react'
 import type { ResolvedCompounds } from '../lib/characterCompounds'
 import type { WordMetadata } from '../lib/types'
+import { resolvePosTag } from '../lib/inferPosTag'
 import { pickL1Meaning } from '../lib/meaningL1'
 import { getWordContentKind } from '../lib/wordContentKind'
+import { montessoriHexForPosTag, posTagDisplayLabel } from '../lib/posTagMontessori'
 
 type SupportedLocale = 'en' | 'zh-TW' | 'th'
 
@@ -61,10 +63,19 @@ export function MeaningTapOverlayCard({
   const compoundAttribution =
     showCompoundBlock && compoundResult?.attribution ? compoundResult.attribution : ''
 
+  const posTag = resolvePosTag(word)
+  const montessoriLineColor = montessoriHexForPosTag(posTag)
+
   return (
     <div className="pointer-events-auto max-h-[min(72vh,680px)] w-full overflow-y-auto overscroll-contain rounded-3xl border border-white/10 bg-black/82 px-5 pb-5 pt-7 text-left shadow-[0_16px_48px_rgba(0,0,0,0.55)] backdrop-blur-md sm:px-6 sm:pb-6 sm:pt-9">
       <div className="text-center">
         <div className={`${hanHeadline} ${headlineSizeClass(word.character)}`}>{word.character}</div>
+        <span className="sr-only">Word type: {posTagDisplayLabel(posTag)}</span>
+        <div
+          className="mx-auto mt-2.5 h-[3px] w-14 max-w-[40%] rounded-full sm:w-16"
+          style={{ backgroundColor: montessoriLineColor }}
+          aria-hidden
+        />
         <div className="mt-2 text-base font-medium text-white/80">{word.pinyin}</div>
       </div>
       <div className="mt-3 h-px w-full bg-white/15" />

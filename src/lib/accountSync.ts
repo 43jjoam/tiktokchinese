@@ -372,19 +372,38 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<{
       setProfileUploadDoneUserId(userId)
       return { uploaded: false, merged: true }
     }
-    savePersistedState({
-      wordStates: {},
-      videoQuality: {},
-      meta: {
-        ...DEFAULT_STUDY_META,
-        lastCloudProfileUserId: userId,
-        accountMagicLinkSentAt: local.meta.accountMagicLinkSentAt,
-        accountSaveNotNowCount: local.meta.accountSaveNotNowCount,
-      },
-    })
-    clearCurrentWordId()
-    notifyPersistedStateReplaced()
-    local = loadPersistedState()
+    /**
+     * No `user_learning_profiles` row for this auth user. Previously we wiped local storage here.
+     * That produced “empty new user” UX when the same person had two Auth rows (e.g. historical
+     * email casing) or a new uuid with no row yet — local still had progress from the old binding.
+     * If this device has study progress, keep it and fall through so we upsert to the signed-in user.
+     */
+    if (localLearningProgressNeedsUploadFirst()) {
+      savePersistedState({
+        ...local,
+        meta: {
+          ...local.meta,
+          lastCloudProfileUserId: undefined,
+          lastMergedRemoteUpdatedAt: undefined,
+        },
+      })
+      notifyPersistedStateReplaced()
+      local = loadPersistedState()
+    } else {
+      savePersistedState({
+        wordStates: {},
+        videoQuality: {},
+        meta: {
+          ...DEFAULT_STUDY_META,
+          lastCloudProfileUserId: userId,
+          accountMagicLinkSentAt: local.meta.accountMagicLinkSentAt,
+          accountSaveNotNowCount: local.meta.accountSaveNotNowCount,
+        },
+      })
+      clearCurrentWordId()
+      notifyPersistedStateReplaced()
+      local = loadPersistedState()
+    }
   }
 
   if (local.meta.lastMergedRemoteUpdatedAt && !local.meta.lastCloudProfileUserId) {

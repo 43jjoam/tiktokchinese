@@ -24,13 +24,6 @@ function consistencyMultiplier(hoursSinceLastSeen: number): number {
   return 1.15
 }
 
-function expDecayM(mOld: number, hoursSinceLastSeen: number): number {
-  // PRD: Decay rate = 0.0208 (equivalent to ~48h in the doc).
-  // We apply: M * exp(-decayRate * hours).
-  const DECAY_RATE = 0.0208
-  return mOld * Math.exp(-DECAY_RATE * hoursSinceLastSeen)
-}
-
 function scoreFromSession(signals: SessionSignals): number {
   const { swipeDirection, tapOccurred, tapTiming, loopsElapsed } = signals
 
@@ -67,11 +60,11 @@ export function updateWordState(args: {
   const { prev, signals, alpha, nowMs } = args
 
   const hoursSinceLastSeen = prev.lastSeenAt ? (nowMs - prev.lastSeenAt) / 36e5 : 9999
-  const decayed = expDecayM(prev.mScore, Math.min(hoursSinceLastSeen, 9999))
   const consistency = prev.lastSeenAt ? consistencyMultiplier(hoursSinceLastSeen) : 1.0
   const scoreS = scoreFromSession(signals)
 
-  const mScore = Math.max(0, decayed + scoreS * alpha * consistency)
+  /* Persisted M_score is only moved by session signals (PRD v3). Time decay is display-only (`computeMDecayed`). */
+  const mScore = Math.max(0, prev.mScore + scoreS * alpha * consistency)
 
   // PRD mastery gate:
   // Mastery confirmed when a word achieves 3 consecutive "Loop 1 / No Tap" sessions,
@@ -98,7 +91,8 @@ export function updateWordState(args: {
     lastLoop1NoTapAt = null
   }
 
-  const masteryConfirmed = consecutiveLoop1NoTapSessions >= 3
+  /* Once the gate is satisfied, keep Gold / all_meanings_mastered latched (Phase 1). */
+  const masteryConfirmed = prev.masteryConfirmed || consecutiveLoop1NoTapSessions >= 3
 
   return {
     ...prev,

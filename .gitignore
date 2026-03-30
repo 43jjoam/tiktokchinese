@@ -7,3 +7,14 @@ __pycache__
 prd_extracted.txt
 .env
 .env.local
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# Editor (local-only; remove this line if you want to commit shared .vscode)
+.vscode/

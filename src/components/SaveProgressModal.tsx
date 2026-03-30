@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getLastUsedAccountEmail, sendMagicLink, setLastUsedAccountEmail } from '../lib/accountSync'
+import { isValidEmail } from '../lib/emailValidation'
 
 type Props = {
   open: boolean
@@ -90,10 +91,11 @@ export function SaveProgressModal({
   }, [open, linkSentHardLocked, resendCooldownUntil])
 
   const submit = useCallback(async () => {
+    if (!isValidEmail(email)) return
     setError(null)
     setErrorDetail(null)
     setBusy(true)
-    const r = await sendMagicLink(email)
+    const r = await sendMagicLink(email.trim())
     setBusy(false)
     if (!r.ok) {
       setError(r.message)
@@ -105,6 +107,8 @@ export function SaveProgressModal({
     onMagicLinkSent()
     setSent(true)
   }, [email, onMagicLinkSent])
+
+  const emailOk = isValidEmail(email)
 
   const goBackToEmail = useCallback(() => {
     setSent(false)
@@ -145,6 +149,20 @@ export function SaveProgressModal({
 
   const backdropDismissible =
     !linkSentHardLocked && (sent ? true : allowNotNow)
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (!backdropDismissible) return
+      e.preventDefault()
+      e.stopPropagation()
+      if (sent) onAcknowledgeLinkSent()
+      else onDismissWithoutAccount()
+    }
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => window.removeEventListener('keydown', onKeyDown, true)
+  }, [open, backdropDismissible, sent, onAcknowledgeLinkSent, onDismissWithoutAccount])
 
   return (
     <AnimatePresence>
@@ -247,7 +265,7 @@ export function SaveProgressModal({
                   ) : null}
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || !emailOk}
                     onClick={() => void submit()}
                     className="mt-5 w-full rounded-xl bg-white py-3.5 text-sm font-bold text-zinc-950 transition-opacity disabled:opacity-50"
                   >

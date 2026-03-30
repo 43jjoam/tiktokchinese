@@ -22,8 +22,6 @@ import {
   peekCachedLessonVideoSignedUrl,
 } from '../lib/storageVideoUrl'
 import { resolveCharacterCompounds } from '../lib/characterCompounds'
-import { resolvePosTag } from '../lib/inferPosTag'
-import { montessoriHexForPosTag } from '../lib/posTagMontessori'
 import { getWordContentKind } from '../lib/wordContentKind'
 import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
 import { extractYouTubeVideoId } from '../lib/youtubeUrl'
@@ -99,6 +97,10 @@ type Props = {
   respectAnonymousSwipeCap?: boolean
   /** Used with `respectAnonymousSwipeCap` — true if the user has a Supabase session. */
   isSignedIn?: boolean
+  /** With `disableSrsScoring`, horizontal swipes navigate this list instead of applying SRS and closing. */
+  browseWordList?: WordMetadata[]
+  /** Skip SRS on swipe; use with `browseWordList` for profile vault browsing. */
+  disableSrsScoring?: boolean
 }
 
 /** Tween (not spring) so collapse-on-back finishes quickly and does not ring past the thumbnail. */
@@ -111,8 +113,9 @@ const sharedThumbLayoutTransition = {
 }
 
 /**
- * Single-word loop player from Profile (Saved / Liked / Shared).
- * Horizontal swipe left/right applies the same SRS update as `VideoFeed` and returns to the grid.
+ * Single-word loop player from Profile (Saved / Liked / Shared), or vault browse when
+ * `browseWordList` + `disableSrsScoring` are set (swipes move within the list, no SRS).
+ * Otherwise horizontal swipe applies the same SRS update as `VideoFeed` and returns to the grid.
  * Back exits without recording a swipe session.
  */
 export function EngagementWordPlayer({
@@ -121,9 +124,36 @@ export function EngagementWordPlayer({
   thumbSharedLayoutId,
   respectAnonymousSwipeCap = false,
   isSignedIn = true,
+  browseWordList,
+  disableSrsScoring = false,
 }: Props) {
-  const wordRef = useRef(word)
-  wordRef.current = word
+  const browseWordListRef = useRef(browseWordList)
+  browseWordListRef.current = browseWordList
+  const disableSrsRef = useRef(disableSrsScoring)
+  disableSrsRef.current = disableSrsScoring
+
+  const vaultBrowse = Boolean(
+    disableSrsScoring && browseWordList && browseWordList.length > 0,
+  )
+
+  const [browseIdx, setBrowseIdx] = useState(0)
+
+  useEffect(() => {
+    if (!vaultBrowse) return
+    const list = browseWordListRef.current
+    if (!list?.length) return
+    const i = list.findIndex((w) => w.word_id === word.word_id)
+    setBrowseIdx(i >= 0 ? i : 0)
+  }, [vaultBrowse, word.word_id])
+
+  const activeWord = useMemo(() => {
+    if (!vaultBrowse || !browseWordList?.length) return word
+    const i = Math.max(0, Math.min(browseWordList.length - 1, browseIdx))
+    return browseWordList[i]
+  }, [vaultBrowse, browseWordList, browseIdx, word])
+
+  const wordRef = useRef(activeWord)
+  wordRef.current = activeWord
 
   const [engageVideoReady, setEngageVideoReady] = useState(false)
   const [shareSheetOpen, setShareSheetOpen] = useState(false)
@@ -137,27 +167,27 @@ export function EngagementWordPlayer({
   const userLangLabel = useMemo(() => langDisplayName(rawLang), [rawLang])
 
   const extractedYoutubeId = useMemo(() => {
-    if (!word.youtube_url) return null
-    return extractYouTubeVideoId(word.youtube_url)
-  }, [word.youtube_url])
+    if (!activeWord.youtube_url) return null
+    return extractYouTubeVideoId(activeWord.youtube_url)
+  }, [activeWord.youtube_url])
 
   const [youtubeFallback, setYoutubeFallback] = useState(false)
   const ytId = useMemo(() => {
     if (!extractedYoutubeId) return null
-    if (word.use_video_url) return youtubeFallback ? extractedYoutubeId : null
+    if (activeWord.use_video_url) return youtubeFallback ? extractedYoutubeId : null
     return extractedYoutubeId
-  }, [word.use_video_url, extractedYoutubeId, youtubeFallback])
+  }, [activeWord.use_video_url, extractedYoutubeId, youtubeFallback])
 
-  const needsSignedNativeUrl = Boolean(word.use_video_url && word.video_storage_path?.trim())
+  const needsSignedNativeUrl = Boolean(activeWord.use_video_url && activeWord.video_storage_path?.trim())
   const [nativePlaybackSrc, setNativePlaybackSrc] = useState<string | null>(null)
 
   useEffect(() => {
     setYoutubeFallback(false)
-    if (!needsSignedNativeUrl || !word.video_storage_path) {
+    if (!needsSignedNativeUrl || !activeWord.video_storage_path) {
       setNativePlaybackSrc(null)
       return
     }
-    const fallback = word.video_url
+    const fallback = activeWord.video_url
     const canUseYoutubeBackup = Boolean(extractedYoutubeId)
     const goYoutubeBackup = () => {
       setNativePlaybackSrc(null)
@@ -169,7 +199,7 @@ export function EngagementWordPlayer({
       else setNativePlaybackSrc(fallback)
       return
     }
-    const cached = peekCachedLessonVideoSignedUrl(word.video_storage_path, word.video_storage_bucket)
+    const cached = peekCachedLessonVideoSignedUrl(activeWord.video_storage_path, activeWord.video_storage_bucket)
     if (cached) {
       setNativePlaybackSrc(cached)
       return
@@ -177,7 +207,7 @@ export function EngagementWordPlayer({
     let cancelled = false
     setNativePlaybackSrc(null)
     void (async () => {
-      const result = await createLessonVideoSignedUrl(word.video_storage_path!, word.video_storage_bucket)
+      const result = await createLessonVideoSignedUrl(activeWord.video_storage_path!, activeWord.video_storage_bucket)
       if (cancelled) return
       if ('url' in result) setNativePlaybackSrc(result.url)
       else if (canUseYoutubeBackup) goYoutubeBackup()
@@ -185,19 +215,19 @@ export function EngagementWordPlayer({
     })()
     return () => { cancelled = true }
   }, [
-    word.word_id,
-    word.video_url,
-    word.youtube_url,
+    activeWord.word_id,
+    activeWord.video_url,
+    activeWord.youtube_url,
     needsSignedNativeUrl,
-    word.video_storage_path,
-    word.video_storage_bucket,
+    activeWord.video_storage_path,
+    activeWord.video_storage_bucket,
     extractedYoutubeId,
   ])
 
-  const englishMeaning = word.l1_meanings.en ?? ''
-  const staticMeaning = word.l1_meanings[locale] ?? englishMeaning
+  const englishMeaning = activeWord.l1_meanings.en ?? ''
+  const staticMeaning = activeWord.l1_meanings[locale] ?? englishMeaning
   const [translatedMeaning, setTranslatedMeaning] = useState<string | null>(null)
-  const illustrativeEn = word.illustrative_sentence?.l1_meanings?.en?.trim() ?? ''
+  const illustrativeEn = activeWord.illustrative_sentence?.l1_meanings?.en?.trim() ?? ''
   const [illustrativeGlossTranslated, setIllustrativeGlossTranslated] = useState<string | null>(null)
 
   useEffect(() => {
@@ -217,7 +247,7 @@ export function EngagementWordPlayer({
       cancelled = true
       window.clearTimeout(t)
     }
-  }, [word.word_id, rawLang, isNativelySupported, englishMeaning])
+  }, [activeWord.word_id, rawLang, isNativelySupported, englishMeaning])
 
   useEffect(() => {
     if (isNativelySupported || !illustrativeEn) {
@@ -243,7 +273,7 @@ export function EngagementWordPlayer({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [word.word_id, rawLang, isNativelySupported, illustrativeEn])
+  }, [activeWord.word_id, rawLang, isNativelySupported, illustrativeEn])
 
   const [liked, setLiked] = useState(() => getLocalLikedWordIds().includes(word.word_id))
   const [saved, setSaved] = useState(() => getLocalSavedWordIds().includes(word.word_id))
@@ -271,10 +301,10 @@ export function EngagementWordPlayer({
 
   useEffect(() => {
     setShareSheetOpen(false)
-  }, [word.word_id])
+  }, [activeWord.word_id])
 
   useEffect(() => {
-    const wid = word.word_id
+    const wid = activeWord.word_id
     setLiked(getLocalLikedWordIds().includes(wid))
     setSaved(getLocalSavedWordIds().includes(wid))
     setLikeCount(null)
@@ -289,7 +319,7 @@ export function EngagementWordPlayer({
       cancelAnimationFrame(id1)
       cancelAnimationFrame(id2)
     }
-  }, [word.word_id, refreshEngagement])
+  }, [activeWord.word_id, refreshEngagement])
 
   const [l1Visible, setL1Visible] = useState(false)
   const [l1LockKey, setL1LockKey] = useState(0)
@@ -310,7 +340,7 @@ export function EngagementWordPlayer({
     if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
     tapSingleTimeoutRef.current = null
     lastTapUpTimeRef.current = null
-  }, [word.word_id])
+  }, [activeWord.word_id])
 
   const recordTap = (loopsElapsed: number) => {
     if (tapOccurredRef.current) return
@@ -320,6 +350,18 @@ export function EngagementWordPlayer({
 
   const finalizeSwipeAndExit = useCallback(
     (swipeDirection: SwipeDirection) => {
+      const list = browseWordListRef.current
+      const browseMode = Boolean(disableSrsRef.current && list && list.length > 0)
+      if (browseMode) {
+        if (list!.length <= 1) return
+        setBrowseIdx((i) => {
+          const len = list!.length
+          if (swipeDirection === 'right') return Math.min(len - 1, i + 1)
+          return Math.max(0, i - 1)
+        })
+        return
+      }
+
       if (finalizedRef.current) return
       finalizedRef.current = true
       if (tapSingleTimeoutRef.current) window.clearTimeout(tapSingleTimeoutRef.current)
@@ -523,10 +565,10 @@ export function EngagementWordPlayer({
     }
   }
 
-  const posterUrl = useMemo(() => youtubePosterUrlForWord(word), [word])
+  const posterUrl = useMemo(() => youtubePosterUrlForWord(activeWord), [activeWord])
 
   const missingVideo =
-    !ytId && !(needsSignedNativeUrl && nativePlaybackSrc) && !(word.video_url && !needsSignedNativeUrl)
+    !ytId && !(needsSignedNativeUrl && nativePlaybackSrc) && !(activeWord.video_url && !needsSignedNativeUrl)
 
   useEffect(() => {
     if (missingVideo) {
@@ -536,7 +578,7 @@ export function EngagementWordPlayer({
     setEngageVideoReady(false)
     const t = window.setTimeout(() => setEngageVideoReady(true), 5000)
     return () => window.clearTimeout(t)
-  }, [missingVideo, word.word_id])
+  }, [missingVideo, activeWord.word_id])
 
   const markPlaybackReady = useCallback(() => {
     setEngageVideoReady(true)
@@ -547,8 +589,6 @@ export function EngagementWordPlayer({
 
   const displayedLikeCount =
     backendCountsOk && likeCount !== null ? Math.max(likeCount, liked ? 1 : 0) : null
-
-  const posMontessoriHex = useMemo(() => montessoriHexForPosTag(resolvePosTag(word)), [word])
 
   const slideTransition = { type: 'tween' as const, duration: 0.17, ease: [0.25, 0.1, 0.25, 1] as const }
 
@@ -589,7 +629,7 @@ export function EngagementWordPlayer({
         ) : needsSignedNativeUrl ? (
           nativePlaybackSrc ? (
             <video
-              key={word.word_id}
+              key={activeWord.word_id}
               src={nativePlaybackSrc}
               autoPlay
               muted
@@ -613,10 +653,10 @@ export function EngagementWordPlayer({
               }}
             />
           ) : null
-        ) : word.video_url ? (
+        ) : activeWord.video_url ? (
           <video
-            key={word.video_url}
-            src={word.video_url}
+            key={activeWord.video_url}
+            src={activeWord.video_url}
             autoPlay
             muted
             loop
@@ -671,7 +711,11 @@ export function EngagementWordPlayer({
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         role="application"
-        aria-label="Video replay. Tap for meaning. Swipe left or right to save review and go back."
+        aria-label={
+          vaultBrowse
+            ? 'Video replay. Tap for meaning. Swipe left or right to move between words in this list.'
+            : 'Video replay. Tap for meaning. Swipe left or right to save review and go back.'
+        }
       >
         <AnimatePresence>
           {likeBurstVisible && (
@@ -689,18 +733,6 @@ export function EngagementWordPlayer({
         </AnimatePresence>
       </div>
 
-      {!l1Visible && chromeReady ? (
-        <div className="pointer-events-none absolute left-1/2 top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] z-20 -translate-x-1/2 text-center">
-          <div
-            className="inline-block rounded-2xl border-l-[3px] bg-black/25 px-5 py-2.5 backdrop-blur-sm"
-            style={{ borderLeftColor: posMontessoriHex }}
-          >
-            <div className="text-3xl font-semibold tracking-tight text-white">{word.character}</div>
-            <div className="mt-0.5 text-base text-white/85">{word.pinyin}</div>
-          </div>
-        </div>
-      ) : null}
-
       <AnimatePresence>
         {l1Visible && (
           <motion.div
@@ -712,7 +744,7 @@ export function EngagementWordPlayer({
             className="pointer-events-none absolute inset-x-0 top-0 z-[38] px-0 pt-[calc(1rem+env(safe-area-inset-top,0px))]"
           >
             <MeaningTapOverlayCard
-              word={word}
+              word={activeWord}
               locale={locale}
               isNativelySupported={isNativelySupported}
               userLangLabel={userLangLabel}
@@ -721,7 +753,9 @@ export function EngagementWordPlayer({
               translatedMeaning={translatedMeaning}
               illustrativeGlossTranslated={illustrativeGlossTranslated}
               compoundResult={
-                getWordContentKind(word) === 'character' ? resolveCharacterCompounds(word) : undefined
+                getWordContentKind(activeWord) === 'character'
+                  ? resolveCharacterCompounds(activeWord)
+                  : undefined
               }
             />
           </motion.div>
@@ -777,7 +811,7 @@ export function EngagementWordPlayer({
         <button
           type="button"
           onClick={() => {
-            const started = tryNativeShareWordFromUserGesture(word, {
+            const started = tryNativeShareWordFromUserGesture(activeWord, {
               onFallback: () => setShareSheetOpen(true),
             })
             if (!started) setShareSheetOpen(true)
@@ -802,7 +836,7 @@ export function EngagementWordPlayer({
 
       <ShareWordSheet
         open={shareSheetOpen}
-        word={shareSheetOpen ? word : null}
+        word={shareSheetOpen ? activeWord : null}
         onClose={() => setShareSheetOpen(false)}
       />
     </motion.div>

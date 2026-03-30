@@ -12,10 +12,8 @@ import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState } from '../lib/storage'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
 import { getWordContentKind } from '../lib/wordContentKind'
-import { resolvePosTag } from '../lib/inferPosTag'
-import { POS_TAGS, type PosTag } from '../lib/posTag'
-import { montessoriHexForPosTag } from '../lib/posTagMontessori'
-import type { WordMetadata } from '../lib/types'
+import { sortWordsByCubeTier } from '../lib/cubeVaultSort'
+import type { WordMetadata, WordState } from '../lib/types'
 import {
   ENGAGEMENT_LOCAL_CHANGED_EVENT,
   getLocalLikedWordIds,
@@ -24,6 +22,7 @@ import {
   getLocalSharedWordIds,
 } from '../lib/engagementService'
 import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
+import { CubeVaultGrid } from './CubeVaultGrid'
 import { EngagementWordPlayer } from './EngagementWordPlayer'
 import { GrammarColorsMontessoriPage } from './GrammarColorsMontessoriPage'
 
@@ -166,12 +165,14 @@ function WordListView({
   scopeKind,
   category,
   words,
+  wordStates,
   onBack,
   onPickWord,
 }: {
   scopeKind: ContentKind
   category: Category
   words: WordMetadata[]
+  wordStates: Record<string, WordState | undefined>
   onBack: () => void
   onPickWord: (w: WordMetadata) => void
 }) {
@@ -205,27 +206,7 @@ function WordListView({
         {words.length === 0 ? (
           <p className="mt-6 text-sm text-white/40">No items in this category yet.</p>
         ) : (
-          <div className="space-y-2">
-            {words.map((w) => (
-              <button
-                key={w.word_id}
-                type="button"
-                onClick={() => onPickWord(w)}
-                className="flex w-full items-center gap-4 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left transition-colors active:bg-white/10"
-                style={{
-                  borderLeftWidth: 3,
-                  borderLeftStyle: 'solid',
-                  borderLeftColor: montessoriHexForPosTag(resolvePosTag(w)),
-                }}
-              >
-                <div className="w-12 shrink-0 text-center text-2xl font-bold">{w.character}</div>
-                <div className="min-w-0">
-                  <div className="text-sm text-white/60">{w.pinyin}</div>
-                  <div className="truncate text-sm">{w.l1_meanings.en ?? ''}</div>
-                </div>
-              </button>
-            ))}
-          </div>
+          <CubeVaultGrid words={words} wordStates={wordStates} onPickWord={onPickWord} />
         )}
       </div>
     </motion.div>
@@ -400,6 +381,10 @@ export default function ProfileTab() {
   const [engageTab, setEngageTab] = useState<EngageTab>('shared')
   const [statsSheetOpen, setStatsSheetOpen] = useState(false)
   const [montessoriGrammarOpen, setMontessoriGrammarOpen] = useState(false)
+  const [grammarVault, setGrammarVault] = useState<{
+    word: WordMetadata
+    browseList: WordMetadata[]
+  } | null>(null)
   const [activeList, setActiveList] = useState<ActiveList | null>(null)
   const [listFocusWord, setListFocusWord] = useState<WordMetadata | null>(null)
   const [engageFocusWord, setEngageFocusWord] = useState<WordMetadata | null>(null)
@@ -492,22 +477,10 @@ export default function ProfileTab() {
   const overallProgress = totalWordsAll > 0 ? totalMasteredAll / totalWordsAll : 0
   const overallPct = Math.round(overallProgress * 100)
 
-  const achievedWordsByPosTag = useMemo((): Record<PosTag, WordMetadata[]> => {
-    const buckets = {} as Record<PosTag, WordMetadata[]>
-    for (const t of POS_TAGS) buckets[t] = []
-    for (const w of feedWordList) {
-      const st = ws[w.word_id]
-      if (!st || st.sessionsSeen === 0) continue
-      buckets[resolvePosTag(w)].push(w)
-    }
-    for (const t of POS_TAGS) {
-      buckets[t].sort((a, b) => a.character.localeCompare(b.character, 'zh-Hans-CN'))
-    }
-    return buckets
-  }, [feedWordList, ws, storageRev])
-
   const listWords =
-    activeList === null ? [] : byKind[activeList.kind].wordsByCategory[activeList.category]
+    activeList === null
+      ? []
+      : sortWordsByCubeTier(byKind[activeList.kind].wordsByCategory[activeList.category], ws)
 
   const savedWords = useMemo(
     () => resolveWordsByIds(getLocalSavedWordIds(), feedWordList),
@@ -835,8 +808,13 @@ export default function ProfileTab() {
         {montessoriGrammarOpen ? (
           <GrammarColorsMontessoriPage
             key="montessori-grammar"
-            achievedWordsByPosTag={achievedWordsByPosTag}
-            onBack={() => setMontessoriGrammarOpen(false)}
+            feedWordList={feedWordList}
+            wordStates={ws}
+            onPickVaultWord={(word, browseList) => setGrammarVault({ word, browseList })}
+            onBack={() => {
+              setGrammarVault(null)
+              setMontessoriGrammarOpen(false)
+            }}
           />
         ) : null}
       </AnimatePresence>
@@ -848,6 +826,7 @@ export default function ProfileTab() {
             scopeKind={activeList.kind}
             category={activeList.category}
             words={listWords}
+            wordStates={ws}
             onBack={() => {
               setListFocusWord(null)
               setActiveList(null)
@@ -870,15 +849,33 @@ export default function ProfileTab() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {listFocusWord && (
+        {listFocusWord && activeList ? (
           <EngagementWordPlayer
-            key={`list-${listFocusWord.word_id}`}
+            key={`vault-${activeList.kind}-${activeList.category}`}
             word={listFocusWord}
+            browseWordList={listWords}
+            disableSrsScoring
             onBack={() => setListFocusWord(null)}
-            respectAnonymousSwipeCap={supabaseConfigured}
+            respectAnonymousSwipeCap={false}
             isSignedIn={Boolean(authEmail)}
           />
-        )}
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {grammarVault ? (
+          <div key="grammar-vault-wrap" className="fixed inset-0 z-[70]">
+            <EngagementWordPlayer
+              key="grammar-vault"
+              word={grammarVault.word}
+              browseWordList={grammarVault.browseList}
+              disableSrsScoring
+              onBack={() => setGrammarVault(null)}
+              respectAnonymousSwipeCap={false}
+              isSignedIn={Boolean(authEmail)}
+            />
+          </div>
+        ) : null}
       </AnimatePresence>
     </div>
   )
