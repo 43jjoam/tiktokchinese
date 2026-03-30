@@ -1,7 +1,9 @@
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
+import { isRetryableSupabaseFailure, sleep } from './cloudRetries'
 import { getDeviceHashForEngagement } from './deviceHash'
 import { getSupabaseClient } from './deckService'
 import { hydrateEngagementLocalListsFromCloud } from './engagementService'
+import { getProfileDisplayName, setProfileDisplayNameFromCloud } from './profileDisplayName'
 import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
 import {
   clearCurrentWordId,
@@ -19,6 +21,10 @@ export { PERSISTED_STATE_REPLACED_EVENT }
 
 /** Fired after `user_learning_profiles` upload succeeds (e.g. magic link sign-in). */
 export const CLOUD_PROFILE_SAVED_EVENT = 'tiktokchinese:cloud-profile-saved'
+
+/** Shown on the feed toast and Profile header right after magic-link sync (keep wording in sync). */
+export const SIGNED_IN_CLOUD_PROGRESS_MESSAGE =
+  'Signed in — your learning progress is saved to the cloud.'
 
 const LAST_ACCOUNT_EMAIL_KEY = 'tiktokchinese_last_account_email'
 /** After sign-in, local progress wins until we successfully upload once for this user id (persists across refresh). */
@@ -85,6 +91,8 @@ export type StoredLearningProfilePayload = {
   v: typeof PROFILE_V
   persisted: PersistedState
   currentWordId: string | null
+  /** Profile header name; synced across devices with the same auth user. */
+  displayName?: string
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -100,10 +108,13 @@ function isPersistedState(x: unknown): x is PersistedState {
 function normalizeProfilePayload(raw: unknown): StoredLearningProfilePayload | null {
   if (!isRecord(raw)) return null
   if (raw.v === PROFILE_V && isPersistedState(raw.persisted)) {
+    const dn = raw.displayName
     return {
       v: PROFILE_V,
       persisted: raw.persisted,
       currentWordId: typeof raw.currentWordId === 'string' ? raw.currentWordId : null,
+      displayName:
+        typeof dn === 'string' && dn.trim().length > 0 ? dn.trim().slice(0, 48) : undefined,
     }
   }
   /* Legacy: entire blob was PersistedState */
@@ -134,6 +145,7 @@ function buildUploadPayload(): StoredLearningProfilePayload {
     v: PROFILE_V,
     persisted: loadPersistedState(),
     currentWordId: loadCurrentWordId(),
+    displayName: getProfileDisplayName(),
   }
 }
 
@@ -149,6 +161,9 @@ function applyProfilePayload(p: StoredLearningProfilePayload): void {
   savePersistedState(p.persisted)
   if (p.currentWordId?.trim()) {
     saveCurrentWordId(p.currentWordId.trim())
+  }
+  if (p.displayName?.trim()) {
+    setProfileDisplayNameFromCloud(p.displayName.trim())
   }
   notifyPersistedStateReplaced()
 }
@@ -178,6 +193,24 @@ function userFacingOtpEmailError(raw: string): string {
     return 'We could not send the sign-in email. Please try again later.'
   }
   return 'Could not send the email. Please try again in a few minutes.'
+}
+
+/** Maps raw upload / session errors to short Profile copy (avoid raw PostgREST strings). */
+export function userFacingProfileUploadError(raw: string): string {
+  const m = raw.toLowerCase()
+  if (raw === 'no_client') return 'Cloud backup is not available in this build.'
+  if (raw === 'no_session') return 'You are not signed in. Sign in again, then tap Sync now.'
+  if (raw === 'no_timestamp') return 'Cloud saved but the server response was incomplete. Tap Sync now once more.'
+  if (isRetryableSupabaseFailure(raw) || m.includes('fetch')) {
+    return 'Network issue — check your connection and tap Sync now again.'
+  }
+  if (m.includes('jwt') || m.includes('expired') || m.includes('invalid token')) {
+    return 'Session expired — sign out and sign in again, then tap Sync now.'
+  }
+  if (m.includes('row-level') || m.includes('rls') || m.includes('policy') || m.includes('permission')) {
+    return 'Could not save (permissions). Try signing out and back in.'
+  }
+  return 'Could not save to the cloud. Try again in a moment.'
 }
 
 /**
@@ -264,25 +297,38 @@ export async function uploadLearningProfileFromLocal(): Promise<
   if (!session?.user?.id) return { ok: false, error: 'no_session' }
 
   const body = buildUploadPayload()
-  const { data, error } = await supabase
-    .from('user_learning_profiles')
-    .upsert(
-      {
-        user_id: session.user.id,
-        payload: body as unknown as Record<string, unknown>,
-      },
-      { onConflict: 'user_id' },
-    )
-    .select('updated_at')
-    .single()
+  const attempts = 3
+  const baseMs = 450
+  let lastMessage = 'unknown_error'
 
-  if (error) {
-    return { ok: false, error: error.message }
+  for (let i = 0; i < attempts; i++) {
+    const { data, error } = await supabase
+      .from('user_learning_profiles')
+      .upsert(
+        {
+          user_id: session.user.id,
+          payload: body as unknown as Record<string, unknown>,
+        },
+        { onConflict: 'user_id' },
+      )
+      .select('updated_at')
+      .single()
+
+    if (!error && data?.updated_at) {
+      return { ok: true, updated_at: data.updated_at as string }
+    }
+    if (error) {
+      lastMessage = error.message
+      const code = typeof error.code === 'string' ? error.code : undefined
+      const retry = i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)
+      if (!retry) return { ok: false, error: error.message }
+    } else {
+      lastMessage = 'no_timestamp'
+      if (i === attempts - 1) return { ok: false, error: 'no_timestamp' }
+    }
+    await sleep(baseMs * Math.pow(2, i))
   }
-  if (!data?.updated_at) {
-    return { ok: false, error: 'no_timestamp' }
-  }
-  return { ok: true, updated_at: data.updated_at as string }
+  return { ok: false, error: lastMessage }
 }
 
 /** Upload then stamp `lastMergedRemoteUpdatedAt` so local ↔ cloud stay aligned. */
@@ -311,6 +357,34 @@ export async function uploadLearningProfileWithLocalMeta(): Promise<
 }
 
 /**
+ * Pull newer `user_learning_profiles` from the server, then refresh engagement lists from the cloud.
+ * For signed-in users on a new device with an empty local vault.
+ */
+export async function pullLearningProfileFromCloudForCurrentUser(): Promise<
+  { ok: true; merged: boolean } | { ok: false; error: string }
+> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { ok: false, error: 'no_client' }
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const uid = session?.user?.id
+  if (!uid) return { ok: false, error: 'no_session' }
+  try {
+    const merged = await mergeRemoteProfileIfNewer(uid)
+    try {
+      await hydrateEngagementLocalListsFromCloud()
+    } catch (e) {
+      console.warn('[cloudSync] hydrate after manual pull failed', e)
+    }
+    return { ok: true, merged }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, error: msg }
+  }
+}
+
+/**
  * Prefer local until the first successful upload after sign-in for this user id; then merge remote when newer.
  *
  * Binds `lastMergedRemoteUpdatedAt` to `lastCloudProfileUserId` so a cursor from another account or browser
@@ -331,22 +405,28 @@ export async function mergeDeviceEngagementAfterSignIn(): Promise<void> {
   } = await supabase.auth.getSession()
   if (!session?.access_token) return
   const device_hash = await getDeviceHashForEngagement()
-  try {
-    const res = await fetch(`${base}/merge-device-engagement`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`,
-        apikey: anon,
-      },
-      body: JSON.stringify({ device_hash }),
-    })
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      console.warn('[cloudSync] merge-device-engagement HTTP', res.status, body.slice(0, 200))
+  const url = `${base}/merge-device-engagement`
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${session.access_token}`,
+    apikey: anon,
+  } as const
+  const body = JSON.stringify({ device_hash })
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, { method: 'POST', headers, body })
+      if (res.ok) return
+      const text = await res.text().catch(() => '')
+      const retryable = res.status >= 502 || res.status === 408 || res.status === 429
+      if (import.meta.env.DEV) {
+        console.warn('[cloudSync] merge-device-engagement HTTP', res.status, text.slice(0, 200))
+      }
+      if (!retryable || attempt === 2) return
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[cloudSync] merge-device-engagement network error', e)
+      if (attempt === 2) return
     }
-  } catch (e) {
-    console.warn('[cloudSync] merge-device-engagement network error', e)
+    await sleep(400 * Math.pow(2, attempt))
   }
 }
 
@@ -360,22 +440,56 @@ export type SyncCloudProfileAfterAuthResult = {
   hadLocalStudyProgressAtStart: boolean
 }
 
+/**
+ * After sign-in: pull engagement rows (by `user_id`) into local lists, then merge learning profile
+ * if the server copy is newer than the local cursor. Safe to call after upload (merge no-ops when cursors match).
+ */
+export async function restoreCloudDataToLocalAfterSignIn(userId: string): Promise<void> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.user?.id || session.user.id !== userId) return
+
+  try {
+    const { liked, saved, shared } = await hydrateEngagementLocalListsFromCloud()
+    if (import.meta.env.DEV && (liked > 0 || saved > 0 || shared > 0)) {
+      console.log('[restore] engagement lists hydrated from cloud', { liked, saved, shared })
+    }
+  } catch (e) {
+    console.warn('[restore] hydrateEngagementLocalListsFromCloud failed', e)
+  }
+
+  try {
+    const merged = await mergeRemoteProfileIfNewer(userId)
+    if (merged) console.log('[restore] learning profile merged from cloud')
+  } catch (e) {
+    console.warn('[restore] mergeRemoteProfileIfNewer failed', e)
+  }
+}
+
 async function finalizeCloudProfileSync(
   userId: string,
   hadLocalStudyProgressAtStart: boolean,
   partial: Pick<SyncCloudProfileAfterAuthResult, 'uploaded' | 'merged' | 'uploadError'>,
 ): Promise<SyncCloudProfileAfterAuthResult> {
-  try {
-    const { liked, saved } = await hydrateEngagementLocalListsFromCloud()
-    if (import.meta.env.DEV && (liked > 0 || saved > 0)) {
-      console.log('[cloudSync] hydrated Profile lists from engagement_events', { liked, saved })
-    }
-  } catch (e) {
-    console.warn('[cloudSync] hydrateEngagementLocalListsFromCloud failed', e)
-  }
+  await restoreCloudDataToLocalAfterSignIn(userId)
 
-  const remoteRow = await fetchRemoteLearningProfile()
+  let remoteRow = await fetchRemoteLearningProfile()
+  if (partial.uploaded && !remoteRow) {
+    for (let i = 0; i < 5; i++) {
+      await sleep(400)
+      remoteRow = await fetchRemoteLearningProfile()
+      if (remoteRow) break
+    }
+  }
   const hasRemoteProfile = remoteRow !== null
+  if (hasRemoteProfile) {
+    console.log('[restore] cloud profile row present for user')
+  } else if (!partial.uploadError) {
+    console.warn('[restore] no cloud profile found for this user (after sync)')
+  }
   if (import.meta.env.DEV) {
     console.log('[cloudSync] syncCloudProfileAfterAuth finished', userId, {
       ...partial,
@@ -465,20 +579,36 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
     local = loadPersistedState()
   }
 
-  const uploadDone = getProfileUploadDoneUserId() === userId
-  const localFirst = !uploadDone && localLearningProgressNeedsUploadFirst()
+  const hasLocalStudy = localLearningProgressNeedsUploadFirst()
+  let uploadDone = getProfileUploadDoneUserId() === userId
+  let remoteProfile = await fetchRemoteLearningProfile()
 
-  if (localFirst) {
-    const up = await uploadLearningProfileWithLocalMeta()
-    if (!up.ok) {
-      return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, {
-        uploaded: false,
-        merged: false,
-        uploadError: up.error,
-      })
+  if (uploadDone && !remoteProfile && hasLocalStudy) {
+    clearProfileUploadDoneUserId()
+    uploadDone = false
+  }
+
+  if (!uploadDone) {
+    /* First time for this uid on this device: always upsert when there is no server row so
+     * `user_learning_profiles` exists (empty payload is valid). If the server already has a row
+     * and local is empty, pull remote only. */
+    if (hasLocalStudy || remoteProfile === null) {
+      const up = await uploadLearningProfileWithLocalMeta()
+      if (!up.ok) {
+        console.error('[sync] profile upload FAILED:', up.error)
+        return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, {
+          uploaded: false,
+          merged: false,
+          uploadError: up.error,
+        })
+      }
+      console.log('[sync] profile upload succeeded')
+      setProfileUploadDoneUserId(userId)
+      return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, { uploaded: true, merged: false })
     }
+    const merged = await mergeRemoteProfileIfNewer(userId)
     setProfileUploadDoneUserId(userId)
-    return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, { uploaded: true, merged: false })
+    return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, { uploaded: false, merged })
   }
 
   const merged = await mergeRemoteProfileIfNewer(userId)
@@ -495,16 +625,32 @@ export async function fetchRemoteLearningProfile(): Promise<
   } = await supabase.auth.getSession()
   if (!session?.user?.id) return null
 
-  const { data, error } = await supabase
-    .from('user_learning_profiles')
-    .select('payload, updated_at')
-    .eq('user_id', session.user.id)
-    .maybeSingle()
+  const uid = session.user.id
+  const attempts = 3
+  const baseMs = 450
 
-  if (error || !data?.payload) return null
-  const normalized = normalizeProfilePayload(data.payload)
-  if (!normalized) return null
-  return { payload: normalized, updated_at: data.updated_at as string }
+  for (let i = 0; i < attempts; i++) {
+    const { data, error } = await supabase
+      .from('user_learning_profiles')
+      .select('payload, updated_at')
+      .eq('user_id', uid)
+      .maybeSingle()
+
+    if (!error && data?.payload) {
+      const normalized = normalizeProfilePayload(data.payload)
+      if (!normalized) return null
+      return { payload: normalized, updated_at: data.updated_at as string }
+    }
+    if (error) {
+      const code = typeof error.code === 'string' ? error.code : undefined
+      const retry = i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)
+      if (!retry) return null
+    } else {
+      return null
+    }
+    await sleep(baseMs * Math.pow(2, i))
+  }
+  return null
 }
 
 function remoteIsNotNewerThanCursor(remoteUpdatedAt: string, localCursor: string): boolean {

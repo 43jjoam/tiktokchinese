@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  CLOUD_PROFILE_SAVED_EVENT,
+  countWordsWithSessions,
   getAuthEmail,
+  pullLearningProfileFromCloudForCurrentUser,
   PERSISTED_STATE_REPLACED_EVENT,
   setLastUsedAccountEmail,
   setProfileUploadDoneUserId,
   uploadLearningProfileWithLocalMeta,
+  userFacingProfileUploadError,
 } from '../lib/accountSync'
 import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState } from '../lib/storage'
@@ -25,8 +27,7 @@ import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
 import { CubeVaultGrid } from './CubeVaultGrid'
 import { EngagementWordPlayer } from './EngagementWordPlayer'
 import { GrammarColorsMontessoriPage } from './GrammarColorsMontessoriPage'
-
-const NAME_KEY = 'tiktokchinese_display_name'
+import { getProfileDisplayName } from '../lib/profileDisplayName'
 
 type Category = 'mastered' | 'inProgress' | 'new'
 type ContentKind = 'character' | 'vocabulary' | 'grammar'
@@ -46,23 +47,13 @@ const ENGAGE_TAB_LABEL: Record<EngageTab, string> = {
 
 const ENGAGE_EMPTY: Record<EngageTab, string> = {
   shared: 'Nothing shared yet — tap Share on a card in the feed.',
-  received: 'Nothing here yet — clips others share with you will appear when available.',
+  received: 'Nothing here yet — open a gift link someone sent you, or sign in on this device to sync received clips.',
   saved: 'Nothing saved yet — tap Save on a card in the feed.',
   liked: 'No likes yet — tap the heart on a card in the feed.',
 }
 
 const ACTIVE_TAB = 'text-white'
 const INACTIVE_TAB = 'text-white/45'
-
-function getOrCreateName(): string {
-  let name = localStorage.getItem(NAME_KEY)
-  if (!name) {
-    const suffix = Math.floor(1000 + Math.random() * 9000)
-    name = `Learner-${suffix}`
-    localStorage.setItem(NAME_KEY, name)
-  }
-  return name
-}
 
 function resolveWordsByIds(ids: string[], feed: WordMetadata[]): WordMetadata[] {
   const byId = new Map(feed.map((w) => [w.word_id, w]))
@@ -74,9 +65,10 @@ type Bucketed = {
   wordsByCategory: Record<Category, WordMetadata[]>
 }
 
+/** Aligns with vault cubes: Solid tier (mScore ≥ 5) or gold latch counts as mastered in lists. */
 function bucketByProgress(
   words: WordMetadata[],
-  wordStates: Record<string, { sessionsSeen: number; masteryConfirmed: boolean }>,
+  wordStates: Record<string, WordState | undefined>,
 ): Bucketed {
   const mastered: WordMetadata[] = []
   const inProgress: WordMetadata[] = []
@@ -86,7 +78,7 @@ function bucketByProgress(
     const st = wordStates[w.word_id]
     if (!st || st.sessionsSeen === 0) {
       unseen.push(w)
-    } else if (st.masteryConfirmed) {
+    } else if (st.masteryConfirmed || st.mScore >= 5) {
       mastered.push(w)
     } else {
       inProgress.push(w)
@@ -377,7 +369,7 @@ function ProfileThumbFill({ word, className }: { word: WordMetadata; className?:
 }
 
 export default function ProfileTab() {
-  const displayName = useMemo(() => getOrCreateName(), [])
+  const [displayName, setDisplayName] = useState(() => getProfileDisplayName())
   const [engageTab, setEngageTab] = useState<EngageTab>('shared')
   const [statsSheetOpen, setStatsSheetOpen] = useState(false)
   const [montessoriGrammarOpen, setMontessoriGrammarOpen] = useState(false)
@@ -394,7 +386,8 @@ export default function ProfileTab() {
   const [authEmail, setAuthEmail] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [syncHint, setSyncHint] = useState<string | null>(null)
-  const [cloudSavedBanner, setCloudSavedBanner] = useState(false)
+  const [restoreBusy, setRestoreBusy] = useState(false)
+  const [restoreHint, setRestoreHint] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -425,13 +418,8 @@ export default function ProfileTab() {
   }, [])
 
   useEffect(() => {
-    const onCloudSaved = () => {
-      setCloudSavedBanner(true)
-      window.setTimeout(() => setCloudSavedBanner(false), 14000)
-    }
-    window.addEventListener(CLOUD_PROFILE_SAVED_EVENT, onCloudSaved)
-    return () => window.removeEventListener(CLOUD_PROFILE_SAVED_EVENT, onCloudSaved)
-  }, [])
+    setDisplayName(getProfileDisplayName())
+  }, [storageRev])
 
   useEffect(() => {
     const client = getSupabaseClient()
@@ -498,6 +486,24 @@ export default function ProfileTab() {
     () => resolveWordsByIds(getLocalReceivedWordIds(), feedWordList),
     [feedWordList, engagementRev],
   )
+
+  const profileVisuallyEmpty = useMemo(() => {
+    if (countWordsWithSessions(ws) > 0) return false
+    if (persisted.meta.first20Seen > 0) return false
+    if (
+      savedWords.length + likedWords.length + sharedWords.length + receivedWords.length >
+      0
+    )
+      return false
+    return true
+  }, [
+    ws,
+    persisted.meta.first20Seen,
+    savedWords.length,
+    likedWords.length,
+    sharedWords.length,
+    receivedWords.length,
+  ])
 
   const currentEngageWords = useMemo(() => {
     switch (engageTab) {
@@ -571,7 +577,26 @@ export default function ProfileTab() {
       }
       setStorageRev((x) => x + 1)
     } else {
-      setSyncHint(r.error)
+      setSyncHint(userFacingProfileUploadError(r.error))
+    }
+  }, [])
+
+  const onRestoreFromCloud = useCallback(async () => {
+    setRestoreHint(null)
+    setRestoreBusy(true)
+    try {
+      const r = await pullLearningProfileFromCloudForCurrentUser()
+      if (!r.ok) {
+        setRestoreHint(userFacingProfileUploadError(r.error))
+        return
+      }
+      setRestoreHint(
+        r.merged ? 'Restored progress from your account.' : 'Already matches the cloud on this device.',
+      )
+      setStorageRev((x) => x + 1)
+      setEngagementRev((x) => x + 1)
+    } finally {
+      setRestoreBusy(false)
     }
   }, [])
 
@@ -582,70 +607,116 @@ export default function ProfileTab() {
       <header className="shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         {!authChecked && supabaseConfigured ? (
           <p className="text-sm text-white/50">Checking account…</p>
-        ) : authEmail ? (
-          <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-3">
-            <div className="text-xs font-semibold uppercase tracking-wide text-white/45">Account</div>
-            <p className="mt-1 text-sm text-white/85">Signed in as {authEmail}</p>
-            <p className="mt-2 flex items-start gap-2 text-xs leading-relaxed text-emerald-200/90">
-              <span
-                className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/25 text-[11px] font-bold text-emerald-100"
-                aria-hidden
-              >
-                ✓
-              </span>
-              <span>
-                Cloud backup is on. Progress also updates in the background while you study — use Sync now if you want
-                an immediate upload.
-              </span>
-            </p>
-            {persisted.meta.lastMergedRemoteUpdatedAt ? (
-              <p className="mt-0.5 text-[11px] text-white/40">
-                Last cloud update:{' '}
-                {new Date(persisted.meta.lastMergedRemoteUpdatedAt).toLocaleString(undefined, {
-                  dateStyle: 'short',
-                  timeStyle: 'short',
-                })}
-              </p>
-            ) : null}
-            {syncHint ? <p className="mt-2 text-xs text-emerald-300/95">{syncHint}</p> : null}
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => void onSyncNow()}
-                className="rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white active:bg-white/25"
-              >
-                Sync now
-              </button>
-            </div>
-          </div>
-        ) : supabaseConfigured ? null : (
+        ) : !supabaseConfigured ? (
           <p className="text-sm text-white/50">Cloud backup is not configured in this build.</p>
-        )}
-
-        {cloudSavedBanner ? (
-          <div
-            role="status"
-            aria-live="polite"
-            className="mt-3 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-3 text-sm leading-snug text-emerald-50 ring-1 ring-emerald-400/25"
-          >
-            <span className="font-bold text-white">You&apos;re all set.</span> Your memory profile (scores, taps, and
-            progress) was just saved to your account. It will load automatically when you sign in on another device.
-          </div>
         ) : null}
 
         <button
           type="button"
           onClick={() => setStatsSheetOpen(true)}
-          className="mt-3 flex w-full flex-col items-center rounded-2xl py-2 active:bg-white/5"
-          aria-label="Open learning progress"
+          className={`flex w-full flex-row items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left transition-colors active:bg-white/[0.07] ${
+            !authChecked && supabaseConfigured ? 'mt-3' : !supabaseConfigured ? 'mt-3' : ''
+          }`}
+          aria-label="Open learning progress — mastery stats, cubes by deck, and word types"
         >
-          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-3xl font-bold shadow-lg ring-2 ring-white/10">
+          <div className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-bold shadow-lg ring-2 ring-white/10">
             {displayName.charAt(0).toUpperCase()}
           </div>
-          <h1 className="mt-2.5 text-lg font-bold text-white">{displayName}</h1>
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-lg font-bold text-white">{displayName}</h1>
+            <p className="mt-0.5 text-sm text-white/45">Learning progress · cubes and word types</p>
+          </div>
+          <svg
+            viewBox="0 0 24 24"
+            width="22"
+            height="22"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            className="shrink-0 text-white/35"
+            aria-hidden
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
         </button>
 
-        <EngageTabBar active={engageTab} onChange={setEngageTab} />
+        {authChecked && authEmail ? (
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <p className="min-w-0 flex-1 text-xs leading-snug text-white/55">
+                <span className="font-medium uppercase tracking-wide text-white/40">Account</span>
+                <span className="mt-0.5 block truncate text-sm text-white/85" title={authEmail}>
+                  {authEmail}
+                </span>
+              </p>
+              <button
+                type="button"
+                onClick={() => void onSyncNow()}
+                className="shrink-0 rounded-lg bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white active:bg-white/25"
+              >
+                Sync now
+              </button>
+            </div>
+            {syncHint ? (
+              <p
+                className={`mt-2 text-xs ${
+                  syncHint.startsWith('Saved to') ? 'text-emerald-300/95' : 'text-amber-200/90'
+                }`}
+              >
+                {syncHint}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {authChecked && supabaseConfigured && profileVisuallyEmpty ? (
+          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3">
+            <p className="text-sm leading-relaxed text-white/75">
+              {authEmail ? (
+                <>
+                  This device doesn&apos;t show any study progress yet. If you already learned on another device, tap{' '}
+                  <span className="font-semibold text-white">Restore from cloud</span> — or keep studying in Home and
+                  your stats will fill in here.
+                </>
+              ) : (
+                <>
+                  Progress and saved clips appear here after you use the Home tab. When the feed asks you to save your
+                  progress, sign in so everything stays in sync across devices.
+                </>
+              )}
+            </p>
+            {authEmail ? (
+              <div className="mt-3 flex flex-col gap-2">
+                <button
+                  type="button"
+                  disabled={restoreBusy}
+                  onClick={() => void onRestoreFromCloud()}
+                  className="rounded-lg bg-indigo-500/35 px-3 py-2 text-xs font-semibold text-indigo-100 ring-1 ring-indigo-400/30 transition-colors active:bg-indigo-500/45 disabled:opacity-50"
+                >
+                  {restoreBusy ? 'Checking cloud…' : 'Restore from cloud'}
+                </button>
+                {restoreHint ? (
+                  <p
+                    className={`text-xs leading-snug ${
+                      restoreHint.startsWith('Restored')
+                        ? 'text-emerald-300/90'
+                        : restoreHint.startsWith('Already')
+                          ? 'text-white/55'
+                          : 'text-amber-200/90'
+                    }`}
+                  >
+                    {restoreHint}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-5 border-t border-white/10 pt-4">
+          <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/40">Your clips</p>
+          <EngageTabBar active={engageTab} onChange={setEngageTab} />
+        </div>
       </header>
 
       <div
@@ -720,50 +791,47 @@ export default function ProfileTab() {
               </div>
             </div>
 
-            {/* Outside scroll: avoids flex/overflow bugs where this row never appears on some viewports */}
-            <div className="shrink-0 px-5 pb-3">
-              <button
-                type="button"
-                onClick={() => setMontessoriGrammarOpen(true)}
-                className="flex w-full items-center gap-3 rounded-2xl border border-violet-500/35 bg-violet-500/10 px-4 py-3 text-left transition-colors active:bg-violet-500/20"
-                aria-label="Word types in Chinese. Opens list and tiles."
-              >
-                <div
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/25"
-                  aria-hidden
-                >
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden>
-                    <circle cx="8" cy="10" r="3.5" fill="#a855f7" fillOpacity="0.9" />
-                    <circle cx="15" cy="8" r="3" fill="#22c55e" fillOpacity="0.85" />
-                    <circle cx="14" cy="15" r="2.8" fill="#ef4444" fillOpacity="0.85" />
-                  </svg>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-violet-200/80">
-                    Word types
-                  </div>
-                  <div className="mt-0.5 text-sm font-semibold text-white">Nouns, verbs &amp; more in Chinese</div>
-                  <div className="mt-0.5 text-[11px] leading-snug text-white/50">
-                    Short meanings + colored tiles — tap here
-                  </div>
-                </div>
-                <svg
-                  viewBox="0 0 24 24"
-                  width="20"
-                  height="20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  className="shrink-0 text-violet-300/70"
-                  aria-hidden
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </button>
-            </div>
-
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+                <button
+                  type="button"
+                  onClick={() => setMontessoriGrammarOpen(true)}
+                  className="mb-6 mt-1 flex w-full items-center gap-3 rounded-2xl border border-violet-500/35 bg-violet-500/10 px-4 py-3 text-left transition-colors active:bg-violet-500/20"
+                  aria-label="Word types in Chinese. Opens list and tiles."
+                >
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/25"
+                    aria-hidden
+                  >
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden>
+                      <circle cx="8" cy="10" r="3.5" fill="#a855f7" fillOpacity="0.9" />
+                      <circle cx="15" cy="8" r="3" fill="#22c55e" fillOpacity="0.85" />
+                      <circle cx="14" cy="15" r="2.8" fill="#ef4444" fillOpacity="0.85" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-violet-200/80">
+                      Word types
+                    </div>
+                    <div className="mt-0.5 text-sm font-semibold text-white">Nouns, verbs &amp; more in Chinese</div>
+                    <div className="mt-0.5 text-[11px] leading-snug text-white/50">
+                      Short meanings + colored tiles — tap here
+                    </div>
+                  </div>
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="shrink-0 text-violet-300/70"
+                    aria-hidden
+                  >
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+
                 <div className="flex flex-col items-center pt-2">
                 <div className="relative">
                   <ProgressRing progress={overallProgress} />
@@ -851,7 +919,7 @@ export default function ProfileTab() {
       <AnimatePresence>
         {listFocusWord && activeList ? (
           <EngagementWordPlayer
-            key={`vault-${activeList.kind}-${activeList.category}`}
+            key={`vault-${activeList.kind}-${activeList.category}-${listFocusWord.word_id}`}
             word={listFocusWord}
             browseWordList={listWords}
             disableSrsScoring
@@ -864,9 +932,9 @@ export default function ProfileTab() {
 
       <AnimatePresence>
         {grammarVault ? (
-          <div key="grammar-vault-wrap" className="fixed inset-0 z-[70]">
+          <div key={`grammar-vault-wrap-${grammarVault.word.word_id}`} className="fixed inset-0 z-[70]">
             <EngagementWordPlayer
-              key="grammar-vault"
+              key={`grammar-vault-${grammarVault.word.word_id}`}
               word={grammarVault.word}
               browseWordList={grammarVault.browseList}
               disableSrsScoring

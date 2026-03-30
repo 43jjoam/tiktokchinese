@@ -12,6 +12,15 @@ function suggestedYoutubeQuality(): string {
   }
 }
 
+/** LAN `http://192.168.*` + IFrame API `origin` often yields error 153; localhost/https are fine. */
+function youtubeEmbedOrigin(): string | undefined {
+  if (typeof window === 'undefined') return undefined
+  const { protocol, hostname } = window.location
+  if (protocol === 'https:') return window.location.origin
+  if (hostname === 'localhost' || hostname === '127.0.0.1') return window.location.origin
+  return undefined
+}
+
 /** Single-short infinite loop (TikTok-style) — IFrame API + ENDED fallback. */
 function applyYoutubeLoop(player: any) {
   try {
@@ -153,10 +162,7 @@ export function YouTubeEmbedPlayer({ videoId, onPlaying }: Props) {
         hostRef.current.innerHTML = ''
         hostRef.current.appendChild(holder)
 
-        const origin =
-          typeof window !== 'undefined' && window.location?.origin
-            ? window.location.origin
-            : undefined
+        const origin = youtubeEmbedOrigin()
 
         playerRef.current = new (window as any).YT.Player(holder, {
           videoId,

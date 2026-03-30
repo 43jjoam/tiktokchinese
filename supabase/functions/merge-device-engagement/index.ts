@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
-import { corsHeaders, DEFAULT_ALLOWED_ORIGINS } from "../_shared/cors.ts";
+import { corsHeadersForRequestOrigin, isOriginAllowed } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -15,17 +15,18 @@ type Body = { device_hash?: string };
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
+  const ch = corsHeadersForRequestOrigin(origin);
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    return new Response(null, { status: 204, headers: ch });
   }
 
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders(origin) });
+    return new Response("Method not allowed", { status: 405, headers: ch });
   }
 
-  if (!origin || !DEFAULT_ALLOWED_ORIGINS.includes(origin)) {
-    return new Response("Forbidden", { status: 403, headers: corsHeaders(origin) });
+  if (!isOriginAllowed(origin)) {
+    return new Response("Forbidden", { status: 403, headers: ch });
   }
 
   const auth = req.headers.get("authorization")?.trim() ?? "";
@@ -33,7 +34,7 @@ Deno.serve(async (req) => {
   if (!token) {
     return new Response(JSON.stringify({ error: "missing_authorization" }), {
       status: 401,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -43,7 +44,7 @@ Deno.serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "invalid_json" }), {
       status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -51,7 +52,7 @@ Deno.serve(async (req) => {
   if (!device_hash || !validDeviceHash(device_hash)) {
     return new Response(JSON.stringify({ error: "invalid_device_hash" }), {
       status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
   if (userErr || !userData?.user?.id) {
     return new Response(JSON.stringify({ error: "invalid_token" }), {
       status: 401,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -74,12 +75,12 @@ Deno.serve(async (req) => {
     console.error("merge-device-engagement rpc", rpcErr);
     return new Response(JSON.stringify({ error: "merge_failed" }), {
       status: 500,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
   return new Response(JSON.stringify({ ok: true, result: rpcData }), {
     status: 200,
-    headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+    headers: { ...ch, "Content-Type": "application/json" },
   });
 });

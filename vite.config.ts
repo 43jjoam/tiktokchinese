@@ -28,9 +28,11 @@ export default defineConfig(({ mode }) => {
     base: '/',
     server: {
       port: 5173,
-      // Listen on LAN so you can open http://<your-mac-ip>:5173 on a phone (same Wi‑Fi).
-      // Note: Web Share API (navigator.share) is usually unavailable on http://<LAN-ip> — use HTTPS or localhost to test it.
-      host: true,
+      // `host: true` makes Vite call os.networkInterfaces() to print LAN URLs; that can throw
+      // ERR_SYSTEM_ERROR (uv_interface_addresses) in sandboxes and some locked-down setups.
+      // Default loopback is enough for http://localhost:5173 — use `npm run dev:lan` for same Wi‑Fi devices.
+      // Web Share API is usually unavailable on http://<LAN-ip>; use HTTPS or localhost to test it.
+      host: process.env.VITE_DEV_LISTEN_ALL === '1' ? true : '127.0.0.1',
     },
   }
 })

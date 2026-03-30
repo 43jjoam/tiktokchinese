@@ -437,7 +437,8 @@ entrypoint = "./functions/get-counts/index.ts"
 
 [functions.record-session-summary]
 enabled = true
-verify_jwt = true
+# Same as record-engagement: browser sends anon JWT: session rows must not block the outbox queue.
+verify_jwt = false
 entrypoint = "./functions/record-session-summary/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:

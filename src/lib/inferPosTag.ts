@@ -1,8 +1,8 @@
 import type { WordMetadata } from './types'
 import type { PosTag } from './posTag'
 
-/** Homographs and other cases where gloss heuristics are wrong. */
-const OVERRIDES: Partial<Record<string, PosTag>> = {
+/** Homographs and other cases where gloss heuristics are wrong. Exported for LLM / CI checks. */
+export const POS_TAG_INFER_OVERRIDES: Partial<Record<string, PosTag>> = {
   'M-hair-05': 'noun',
   'M-sendout-04': 'verb',
   /** Gloss has a non-`to …` chunk but both senses are verbal (understand / know-how). */
@@ -78,7 +78,7 @@ function glossSuggestsModalAuxiliary(en: string): boolean {
  * homographs (e.g. 发 hair vs send out) use `OVERRIDES`.
  */
 export function inferPosTag(w: WordMetadata): PosTag {
-  const byId = OVERRIDES[w.word_id]
+  const byId = POS_TAG_INFER_OVERRIDES[w.word_id]
   if (byId) return byId
 
   const en = (w.l1_meanings?.en ?? '').trim()

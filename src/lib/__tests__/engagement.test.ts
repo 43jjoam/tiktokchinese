@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ENGAGEMENT_LOCAL_CHANGED_EVENT,
+  getLocalReceivedWordIds,
   getLocalSavedWordIds,
+  recordLocalReceivedGift,
   recordLocalShare,
 } from '../engagementService'
 
@@ -37,5 +39,11 @@ describe('engagement local lists', () => {
 
   it('getLocalSavedWordIds is empty by default', () => {
     expect(getLocalSavedWordIds()).toEqual([])
+  })
+
+  it('recordLocalReceivedGift prepends word id for Profile Received', () => {
+    recordLocalReceivedGift('w1')
+    recordLocalReceivedGift('w2')
+    expect(getLocalReceivedWordIds()).toEqual(['w2', 'w1'])
   })
 })

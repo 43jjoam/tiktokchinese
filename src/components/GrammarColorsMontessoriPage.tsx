@@ -12,6 +12,7 @@ import {
 } from '../lib/posTagMontessoriExplainer'
 import { sortWordsByCubeTier } from '../lib/cubeVaultSort'
 import { MasteryCube } from './MasteryCube'
+import { PosTagColorWheel } from './PosTagColorWheel'
 
 type Bands = {
   mastered: WordMetadata[]
@@ -170,6 +171,14 @@ export function GrammarColorsMontessoriPage({
     [feedWordList, wordStates],
   )
 
+  const wheelCountsByTag = useMemo(() => {
+    const o = {} as Record<PosTag, number>
+    for (const t of POS_TAGS) {
+      o[t] = bandsByTag[t].flat.length
+    }
+    return o
+  }, [bandsByTag])
+
   return (
     <>
       <motion.div
@@ -214,12 +223,13 @@ export function GrammarColorsMontessoriPage({
             <p className="mt-2 text-[13px] leading-relaxed text-white/65">{GRAMMAR_PAGE_INTRO_LEAD}</p>
           </section>
 
-          <section className="mt-8">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-white/50">Each type</h2>
-            <p className="mt-2 text-[12px] leading-relaxed text-white/45">
-              Tap a row for cubes (mastered, in progress, then new). Tap a cube to open its lesson video.
-            </p>
-            <ul className="mt-4 space-y-3 p-0">
+          <section className="mt-8 flex flex-col items-center" aria-label="Color wheel by part of speech">
+            <h2 className="sr-only">Color wheel</h2>
+            <PosTagColorWheel onSelectTag={setOpenTilesFor} countsByTag={wheelCountsByTag} />
+          </section>
+
+          <section className="mt-10">
+            <ul className="space-y-3 p-0">
               {POS_TAG_MONTESSORI_LEGEND.map(({ tag, label, hex }) => {
                 const role = POS_TAG_ROLE_IN_CHINESE[tag]
                 const n = bandsByTag[tag].flat.length

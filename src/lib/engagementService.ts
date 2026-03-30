@@ -1,17 +1,18 @@
 import type { WordMetadata } from './types'
+import { isRetryableSupabaseFailure, sleep } from './cloudRetries'
 import { getSupabaseClient } from './deckService'
 import { clipKeyForWord } from './clipKey'
 import { getDeviceHashForEngagement } from './deviceHash'
 import { getGlobalEngagementCounts, invalidateEngagementCountCache } from './engagementCounts'
 import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
-import { enqueueSyncOutboxJob } from './syncOutbox'
+import { enqueueSyncOutboxJob, flushSyncOutbox } from './syncOutbox'
 
 export const ENGAGEMENT_LOCAL_CHANGED_EVENT = 'tiktokchinese:engagement-local-changed'
 
 const LOCAL_LIKED = 'tiktokchinese_engagement_liked_v1'
 const LOCAL_SAVED = 'tiktokchinese_engagement_saved_v1'
 const LOCAL_SHARED = 'tiktokchinese_engagement_shared_recent_v1'
-/** Reserved for “shared with you” / inbox-style items (populated when backend exists). */
+/** Gift / deep-link opens: words someone shared *to* this device (local + optional future server inbox). */
 const LOCAL_RECEIVED = 'tiktokchinese_engagement_received_v1'
 const MAX_RECENT_IDS = 200
 
@@ -58,46 +59,98 @@ function mergeServerAndLocalWordOrder(serverFirst: string[], localExisting: stri
 }
 
 /**
- * After sign-in + merge-device-engagement, rebuild Profile liked/saved lists from `engagement_events`
+ * After sign-in + merge-device-engagement, rebuild Profile liked/saved/shared lists from `engagement_events`
  * so a fresh browser/device shows the same grid as the server (local lists are otherwise empty).
  */
-export async function hydrateEngagementLocalListsFromCloud(): Promise<{ liked: number; saved: number }> {
+export async function hydrateEngagementLocalListsFromCloud(): Promise<{
+  liked: number
+  saved: number
+  shared: number
+}> {
   const supabase = getSupabaseClient()
-  if (!supabase) return { liked: 0, saved: 0 }
+  if (!supabase) return { liked: 0, saved: 0, shared: 0 }
 
   const {
     data: { session },
   } = await supabase.auth.getSession()
   const uid = session?.user?.id
-  if (!uid) return { liked: 0, saved: 0 }
+  if (!uid) return { liked: 0, saved: 0, shared: 0 }
+
+  const attempts = 3
+  const baseMs = 400
 
   const fetchOrdered = async (type: 'like' | 'save') => {
-    const { data, error } = await supabase
-      .from('engagement_events')
-      .select('word_id, created_at')
-      .eq('user_id', uid)
-      .eq('type', type)
-      .eq('is_deleted', false)
-      .order('created_at', { ascending: false })
+    for (let i = 0; i < attempts; i++) {
+      const { data, error } = await supabase
+        .from('engagement_events')
+        .select('word_id, created_at')
+        .eq('user_id', uid)
+        .eq('type', type)
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
 
-    if (error) {
+      if (!error) {
+        const seen = new Set<string>()
+        const out: string[] = []
+        for (const row of data ?? []) {
+          const w = typeof row.word_id === 'string' ? row.word_id : ''
+          if (!w || seen.has(w)) continue
+          seen.add(w)
+          out.push(w)
+        }
+        return out
+      }
+      const code = typeof error.code === 'string' ? error.code : undefined
+      if (i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)) {
+        await sleep(baseMs * Math.pow(2, i))
+        continue
+      }
       if (import.meta.env.DEV) console.warn('[engageHydrate]', type, error.message)
       return [] as string[]
     }
-    const seen = new Set<string>()
-    const out: string[] = []
-    for (const row of data ?? []) {
-      const w = typeof row.word_id === 'string' ? row.word_id : ''
-      if (!w || seen.has(w)) continue
-      seen.add(w)
-      out.push(w)
-    }
-    return out
+    return [] as string[]
   }
 
-  const [likedIds, savedIds] = await Promise.all([fetchOrdered('like'), fetchOrdered('save')])
+  const fetchSharedOrdered = async () => {
+    for (let i = 0; i < attempts; i++) {
+      const { data, error } = await supabase
+        .from('engagement_events')
+        .select('word_id, created_at')
+        .eq('user_id', uid)
+        .in('type', ['share_success', 'share_tap'])
+        .eq('is_deleted', false)
+        .order('created_at', { ascending: false })
+
+      if (!error) {
+        const seen = new Set<string>()
+        const out: string[] = []
+        for (const row of data ?? []) {
+          const w = typeof row.word_id === 'string' ? row.word_id : ''
+          if (!w || seen.has(w)) continue
+          seen.add(w)
+          out.push(w)
+        }
+        return out
+      }
+      const code = typeof error.code === 'string' ? error.code : undefined
+      if (i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)) {
+        await sleep(baseMs * Math.pow(2, i))
+        continue
+      }
+      if (import.meta.env.DEV) console.warn('[engageHydrate] share', error.message)
+      return [] as string[]
+    }
+    return [] as string[]
+  }
+
+  const [likedIds, savedIds, sharedIds] = await Promise.all([
+    fetchOrdered('like'),
+    fetchOrdered('save'),
+    fetchSharedOrdered(),
+  ])
   let liked = 0
   let saved = 0
+  let shared = 0
   if (likedIds.length > 0) {
     persistIdList(LOCAL_LIKED, mergeServerAndLocalWordOrder(likedIds, parseIdList(LOCAL_LIKED)))
     liked = likedIds.length
@@ -106,7 +159,11 @@ export async function hydrateEngagementLocalListsFromCloud(): Promise<{ liked: n
     persistIdList(LOCAL_SAVED, mergeServerAndLocalWordOrder(savedIds, parseIdList(LOCAL_SAVED)))
     saved = savedIds.length
   }
-  return { liked, saved }
+  if (sharedIds.length > 0) {
+    persistIdList(LOCAL_SHARED, mergeServerAndLocalWordOrder(sharedIds, parseIdList(LOCAL_SHARED)))
+    shared = sharedIds.length
+  }
+  return { liked, saved, shared }
 }
 
 function getLikedIdsOrdered(): string[] {
@@ -138,7 +195,7 @@ export function getLocalSharedWordIds(): string[] {
   return parseIdList(LOCAL_SHARED)
 }
 
-/** Words shared *to* the user (placeholder list until receive/share-inbox is wired). */
+/** Words opened via gift link (or future server “inbox”) on this device. */
 export function getLocalReceivedWordIds(): string[] {
   return parseIdList(LOCAL_RECEIVED)
 }
@@ -164,11 +221,22 @@ export function recordLocalShare(wordId: string): void {
   persistIdList(LOCAL_SHARED, ids)
 }
 
+/** Call when user successfully opens a gift link — populates Profile → Received. */
+export function recordLocalReceivedGift(wordId: string): void {
+  const wid = wordId.trim()
+  if (!wid) return
+  const ids = parseIdList(LOCAL_RECEIVED).filter((x) => x !== wid)
+  ids.unshift(wid)
+  persistIdList(LOCAL_RECEIVED, ids)
+}
+
 async function queueRecordEngagement(body: Record<string, unknown>): Promise<void> {
   const url = getSupabaseFunctionsBaseUrl()
   const anon = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
   if (!url || !anon) return
   await enqueueSyncOutboxJob('record-engagement', body)
+  /** So a follow-up `get-counts` sees the new row — `flushSyncOutboxSoon` alone races with `refreshEngagement`. */
+  await flushSyncOutbox()
 }
 
 const GIFT_SHARE_CACHE_MS = 10 * 60 * 1000
@@ -355,6 +423,7 @@ export function recordSessionSummaryFireAndForget(payload: Record<string, unknow
 export type EngagementSnapshot = {
   likeCount: number | null
   saveCount: number | null
+  shareCount: number | null
   liked: boolean
   saved: boolean
   /** False when Supabase read failed or not configured — show "—" for global counts. */
@@ -376,6 +445,7 @@ export async function fetchEngagementSnapshot(word: WordMetadata): Promise<Engag
     return {
       likeCount: null,
       saveCount: null,
+      shareCount: null,
       liked: L.liked,
       saved: L.saved,
       backendCountsOk: false,
@@ -411,6 +481,7 @@ export async function fetchEngagementSnapshot(word: WordMetadata): Promise<Engag
       return {
         likeCount: counts.ok ? counts.likes : null,
         saveCount: counts.ok ? counts.saves : null,
+        shareCount: counts.ok ? counts.shares : null,
         liked: L.liked,
         saved: L.saved,
         backendCountsOk: counts.ok,
@@ -420,6 +491,7 @@ export async function fetchEngagementSnapshot(word: WordMetadata): Promise<Engag
     return {
       likeCount: counts.ok ? counts.likes : null,
       saveCount: counts.ok ? counts.saves : null,
+      shareCount: counts.ok ? counts.shares : null,
       liked: !!myLike.data || L.liked,
       saved: !!mySave.data || L.saved,
       backendCountsOk: counts.ok,
@@ -429,6 +501,7 @@ export async function fetchEngagementSnapshot(word: WordMetadata): Promise<Engag
     return {
       likeCount: null,
       saveCount: null,
+      shareCount: null,
       liked: L.liked,
       saved: L.saved,
       backendCountsOk: false,
@@ -495,6 +568,7 @@ export async function engagementShareSuccess(
   word: WordMetadata,
   method: ShareSuccessMethod,
 ): Promise<void> {
+  invalidateEngagementCountCache(word.word_id)
   const dh = await getDeviceHashForEngagement()
   await queueRecordEngagement({
     op: 'share_success',
@@ -511,9 +585,33 @@ export function buildShareUrl(wordId: string): string {
   return `${origin}${path}?w=${encodeURIComponent(wordId)}`
 }
 
-/** Body text for challenge shares (Web Share, SMS, etc.). */
+const DEFAULT_CANONICAL_SITE = (
+  (import.meta.env.VITE_CANONICAL_SITE_URL as string | undefined)?.trim().replace(/\/$/, '') ||
+  'https://chineseflash.com'
+)
+
+/** Ensure shared bodies use an absolute `https?://` URL so SMS / chat apps can linkify. */
+export function normalizeGiftShareUrl(url: string): string {
+  const t = url.trim()
+  if (!t) return t
+  if (/^https?:\/\//i.test(t)) return t
+  if (t.startsWith('//')) return `https:${t}`
+  const path = t.startsWith('/') ? t : `/${t}`
+  return `${DEFAULT_CANONICAL_SITE}${path}`
+}
+
+/**
+ * Challenge copy without the URL — use with `navigator.share({ url })` so iOS Messages attaches a
+ * tappable link preview instead of burying the URL as plain text at the end.
+ */
+export function buildChallengeShareTextWithoutUrl(word: WordMetadata): string {
+  return `I'm gifting you a Chinese character on Chinese Flash, can you guess the meaning of it?\n\n${word.character} (${word.pinyin})`
+}
+
+/** Body text for SMS, email, WhatsApp, Instagram paste, and clipboard fallback (URL included). */
 export function buildChallengeShareText(word: WordMetadata, url: string): string {
-  return `I'm gifting you a Chinese character on Chinese Flash, can you guess the meaning of it?\n\n${word.character} (${word.pinyin})\n${url}`
+  const u = normalizeGiftShareUrl(url)
+  return `${u}\n\nI'm gifting you a Chinese character on Chinese Flash, can you guess the meaning of it?\n\n${word.character} (${word.pinyin})`
 }
 
 export function isNavigatorShareSupported(): boolean {
@@ -552,12 +650,12 @@ export function tryNativeShareWordFromUserGesture(word: WordMetadata, callbacks:
   }
   void (async () => {
     const url = await resolveShareUrlForWord(word)
-    const text = buildChallengeShareText(word, url)
+    const normalized = normalizeGiftShareUrl(url)
     try {
       await navigator.share({
         title: 'Chinese Flash',
-        text,
-        url,
+        text: buildChallengeShareTextWithoutUrl(word),
+        url: normalized,
       })
       recordLocalShare(word.word_id)
       await engagementShareTap(word)

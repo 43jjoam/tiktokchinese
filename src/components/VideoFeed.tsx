@@ -2,7 +2,15 @@ import type { Session } from '@supabase/supabase-js'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SwipeDirection, TapTiming, WordMetadata, WordState } from '../lib/types'
-import { classifyTapTiming, loopsElapsedFromMs } from '../lib/memoryEngine'
+import { resolvePosTag } from '../lib/inferPosTag'
+import {
+  classifyTapTiming,
+  loopsElapsedFromMs,
+  wordStateSeed,
+} from '../lib/memoryEngine'
+import { deriveMasteryBlockTier } from '../lib/masteryBlockTier'
+import { montessoriHexForPosTag } from '../lib/posTagMontessori'
+import { crossedIntoSolidTier, SOLID_THRESHOLD_ROLL_HOLD_MS } from '../lib/solidThresholdGamification'
 import {
   applyStudySwipeToPersistedState,
   qualityVideoIdForWord,
@@ -23,6 +31,7 @@ import {
   getLocalLikedWordIds,
   getLocalSavedWordIds,
   recordSessionSummaryFireAndForget,
+  recordLocalReceivedGift,
   redeemGiftFailureMessage,
   redeemGiftToken,
   tryNativeShareWordFromUserGesture,
@@ -49,15 +58,15 @@ import {
   PERSISTED_STATE_REPLACED_EVENT,
   setLastUsedAccountEmail,
   setProfileUploadDoneUserId,
+  SIGNED_IN_CLOUD_PROGRESS_MESSAGE,
   syncCloudProfileAfterAuth,
   uploadLearningProfileWithLocalMeta,
+  userFacingProfileUploadError,
 } from '../lib/accountSync'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
 import { SaveProgressModal } from './SaveProgressModal'
 import { ShareWordSheet } from './ShareWordSheet'
 import { prefetchYouTubeIframeApi, YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
-
-const LOOP_MS = 5000
 
 /** At least ~1.5s; if the next clip is slower, the layer stays until it can play. */
 const SWIPE_ENCOURAGEMENT_MIN_MS = 1500
@@ -502,6 +511,54 @@ function SwipeTransitionEncouragement({
   )
 }
 
+/** Phase 1b vertical slice: clip “rolls” toward the vault when mScore crosses Solid on a right swipe. */
+function SolidThresholdRollOverlay({
+  montessoriHex,
+  character,
+  reduceMotion,
+}: {
+  montessoriHex: string
+  character: string
+  reduceMotion: boolean
+}) {
+  return (
+    <motion.div
+      className="pointer-events-none fixed inset-0 z-[38] flex items-center justify-center px-2"
+      initial={{ opacity: 1 }}
+      exit={{ opacity: 0, transition: { duration: 0.2 } }}
+      aria-hidden
+    >
+      <motion.div
+        className="flex aspect-[9/16] h-[min(70dvh,560px)] w-auto max-w-[min(92vw,320px)] flex-col items-center justify-center rounded-3xl bg-black/50 backdrop-blur-[1px]"
+        style={{
+          boxShadow: `0 0 0 3px ${montessoriHex}, 0 0 40px ${montessoriHex}88, inset 0 0 28px ${montessoriHex}2a`,
+        }}
+        initial={
+          reduceMotion
+            ? { scale: 1, opacity: 1 }
+            : { scale: 1, x: 0, y: 0, rotateZ: 0, opacity: 1 }
+        }
+        animate={
+          reduceMotion
+            ? { scale: 0.88, opacity: 0.4, transition: { duration: 0.2 } }
+            : {
+                scale: 0.15,
+                x: 112,
+                y: 240,
+                rotateZ: -12,
+                opacity: 0.92,
+                transition: { duration: 0.78, ease: [0.2, 0.92, 0.2, 1] },
+              }
+        }
+      >
+        <span className="text-5xl font-bold text-white drop-shadow-[0_2px_14px_rgba(0,0,0,0.9)]">
+          {character}
+        </span>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 /* ── Audio: Chinese TTS ── */
 function speakChinese(text: string) {
   try {
@@ -817,27 +874,31 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     try {
       const r = await syncCloudProfileAfterAuth(user.id)
       if (r.uploadError) {
-        console.warn('[cloudSync] profile upload failed:', r.uploadError)
-        setCloudBackupHint(
-          "Couldn’t save your progress to the cloud. Check your connection, then open Profile and tap Sync now.",
-        )
+        console.error('[sync] profile upload FAILED:', r.uploadError)
+        setCloudBackupHint(userFacingProfileUploadError(r.uploadError))
         return
       }
+      console.log('[sync] profile sync succeeded', {
+        uploaded: r.uploaded,
+        merged: r.merged,
+        hasRemoteProfile: r.hasRemoteProfile,
+      })
       if (r.uploaded || r.merged) {
         setSaveProgressOpen(false)
         setSaveProgressForceLinkSent(false)
-        notifyCloudProfileSaved()
-        setCloudSavedToast(true)
-        window.setTimeout(() => setCloudSavedToast(false), 9000)
-        return
+        if (r.hasRemoteProfile) {
+          notifyCloudProfileSaved()
+          setCloudSavedToast(true)
+          window.setTimeout(() => setCloudSavedToast(false), 4000)
+        }
       }
       if (!r.hasRemoteProfile) {
         setCloudBackupHint(
-          'No cloud backup yet for this account. Keep studying and we’ll sync your progress — or open Profile and tap Sync now.',
+          'No cloud backup found yet — your progress will be saved after this session.',
         )
       }
-    } catch (e) {
-      console.error('[cloudSync] syncCloudProfileAfterAuth threw', e)
+    } catch (err) {
+      console.error('[sync] profile sync FAILED:', err)
       setCloudBackupHint('Cloud sync hit an error. Try Profile → Sync now.')
     }
   }, [])
@@ -1001,6 +1062,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           return
         }
         setGiftRedeemError(null)
+        recordLocalReceivedGift(r.word_id)
         setGiftPlayback({ wordId: r.word_id, url: r.signed_url })
         if (words.some((x) => x.word_id === r.word_id)) {
           setCurrentWordId(r.word_id)
@@ -1046,12 +1108,6 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
    */
   const [youtubeFallback, setYoutubeFallback] = useState(false)
 
-  const ytId = useMemo(() => {
-    if (!extractedYoutubeId) return null
-    if (currentWord.use_video_url) return youtubeFallback ? extractedYoutubeId : null
-    return extractedYoutubeId
-  }, [currentWord.use_video_url, extractedYoutubeId, youtubeFallback])
-
   /** Private Supabase Storage: native <video> uses a time-limited signed URL. */
   const needsSignedNativeUrl = Boolean(
     currentWord.use_video_url && currentWord.video_storage_path?.trim(),
@@ -1064,6 +1120,21 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (giftPlayback?.wordId === currentWord.word_id) return giftPlayback.url
     return nativePlaybackSrc
   }, [giftPlayback, currentWord.word_id, nativePlaybackSrc])
+
+  const ytId = useMemo(() => {
+    if (!extractedYoutubeId) return null
+    if (!currentWord.use_video_url) return extractedYoutubeId
+    if (youtubeFallback) return extractedYoutubeId
+    // Avoid a blank layer while Storage signing runs (slow / flaky networks, first load).
+    if (needsSignedNativeUrl && !displayNativePlaybackSrc) return extractedYoutubeId
+    return null
+  }, [
+    currentWord.use_video_url,
+    extractedYoutubeId,
+    youtubeFallback,
+    needsSignedNativeUrl,
+    displayNativePlaybackSrc,
+  ])
 
   useEffect(() => {
     setYoutubeFallback(false)
@@ -1242,6 +1313,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     dir: SwipeDirection
     text: string
   } | null>(null)
+  const [leavingSolidRoll, setLeavingSolidRoll] = useState<{
+    montessoriHex: string
+    character: string
+  } | null>(null)
 
   const swipeTransitionLineRef = useRef(swipeTransitionLine)
   swipeTransitionLineRef.current = swipeTransitionLine
@@ -1272,8 +1347,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
-  /** Global like count from backend; never show a stale/local number as global (PRD). */
+  /** Displayed global counts (API + stable per-word floor). */
   const [likeCount, setLikeCount] = useState<number | null>(null)
+  const [saveCount, setSaveCount] = useState<number | null>(null)
+  const [shareCount, setShareCount] = useState<number | null>(null)
   const [backendCountsOk, setBackendCountsOk] = useState(false)
 
   useEffect(() => {
@@ -1358,6 +1435,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     setLiked(snap.liked)
     setSaved(snap.saved)
     setLikeCount(snap.likeCount)
+    setSaveCount(snap.saveCount)
+    setShareCount(snap.shareCount)
     setBackendCountsOk(snap.backendCountsOk)
   }, [])
 
@@ -1366,6 +1445,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     setLiked(getLocalLikedWordIds().includes(wid))
     setSaved(getLocalSavedWordIds().includes(wid))
     setLikeCount(null)
+    setSaveCount(null)
+    setShareCount(null)
     setBackendCountsOk(false)
     void refreshEngagement(currentWordRef.current)
   }, [currentWordId, refreshEngagement])
@@ -1389,19 +1470,6 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       obs.disconnect()
     }
   }, [refreshEngagement])
-
-  const chooseNextWordFromBuckets = (excludeWordId?: string) => {
-    const roll = Math.random()
-    const candidates = excludeWordId ? words.filter((w) => w.word_id !== excludeWordId) : words
-    if (candidates.length === 0) return pickRandomWord(words)
-    const next = pickNextWord({
-      words: candidates,
-      wordStates,
-      roll,
-      sessionsServed: meta.sessionsServed,
-    })
-    return next
-  }
 
   useEffect(() => {
     const onVisibility = () => {
@@ -1511,8 +1579,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     const nowMs = Date.now()
     const elapsed = nowMs - sessionStartMsRef.current
 
-    setPersisted((prev) =>
-      applyStudySwipeToPersistedState({
+    let solidRoll: { montessoriHex: string; character: string } | null = null
+    setPersisted((prev) => {
+      const next = applyStudySwipeToPersistedState({
         word: currentWordRef.current,
         swipeDirection,
         sessionElapsedMs: elapsed,
@@ -1520,18 +1589,41 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         tapTiming: tapTimingRef.current,
         persisted: prev,
         nowMs,
-      }),
-    )
+      })
+      if (swipeDirection === 'right') {
+        const w = currentWordRef.current
+        const wid = w.word_id
+        const prevW = prev.wordStates[wid] ?? wordStateSeed(w)
+        const nextW = next.wordStates[wid]!
+        if (crossedIntoSolidTier(prevW, nextW)) {
+          solidRoll = {
+            montessoriHex: montessoriHexForPosTag(resolvePosTag(w)),
+            character: w.character,
+          }
+        }
+      }
+      return next
+    })
+    setLeavingSolidRoll(solidRoll)
 
     const currentId = currentWordRef.current.word_id
-    setTimeout(() => {
+    const advanceDelay = solidRoll ? SOLID_THRESHOLD_ROLL_HOLD_MS : 120
+    window.setTimeout(() => {
+      setLeavingSolidRoll(null)
       setSessionVideoIndex((i) => i + 1)
-      const nextWord = chooseNextWordFromBuckets(currentId)
+      const snap = loadPersistedState()
+      const all = wordsRef.current
+      const candidates = currentId ? all.filter((w) => w.word_id !== currentId) : all
+      const pool = candidates.length ? candidates : all
+      const nextWord = pickNextWord({
+        words: pool,
+        wordStates: snap.wordStates,
+        roll: Math.random(),
+        sessionsServed: snap.meta.sessionsServed,
+      })
       setCurrentWordId(nextWord.word_id)
-      // Safety net: if the word ID happens to be the same (shouldn't happen now),
-      // reset finalizedRef so gestures keep working.
       finalizedRef.current = false
-    }, 120)
+    }, advanceDelay)
   }
 
   const doLikeRef = useRef<() => void>(() => {})
@@ -1558,6 +1650,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const handleSaveToggle = useCallback(() => {
     const next = !savedRef.current
     setSaved(next)
+    if (backendCountsOkRef.current) {
+      setSaveCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
+    }
     void engagementSetSave(currentWordRef.current, next).then(() => refreshEngagement())
   }, [refreshEngagement])
 
@@ -1727,6 +1822,26 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   const displayedLikeCount =
     backendCountsOk && likeCount !== null ? Math.max(likeCount, liked ? 1 : 0) : null
+  const displayedSaveCount =
+    backendCountsOk && saveCount !== null ? Math.max(saveCount, saved ? 1 : 0) : null
+  const displayedShareCount = backendCountsOk && shareCount !== null ? shareCount : null
+
+  const solidGoldMasteryFrame = useMemo(() => {
+    if (!videoReady) return null
+    const st = wordStates[currentWord.word_id]
+    const tier = deriveMasteryBlockTier(st?.mScore ?? 0, st?.masteryConfirmed ?? false)
+    if (tier !== 'solid' && tier !== 'gold') return null
+    const frameHex = tier === 'gold' ? '#facc15' : montessoriHexForPosTag(resolvePosTag(currentWord))
+    return (
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-[2]"
+        style={{
+          boxShadow: `inset 0 0 0 3px ${frameHex}cc, inset 0 0 52px ${frameHex}44`,
+        }}
+      />
+    )
+  }, [videoReady, wordStates, currentWord])
 
   const supabaseClient = getSupabaseClient()
 
@@ -1756,6 +1871,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         className="absolute inset-0 z-[1] bg-black md:flex md:items-center md:justify-center"
         style={{ pointerEvents: 'none' }}
       >
+        {solidGoldMasteryFrame}
         {ytId ? (
           <div className="h-full w-full min-h-0 min-w-0 md:mx-auto md:h-[min(100dvh,calc(100vw*16/9))] md:w-[min(100vw,calc(100dvh*9/16))]">
             <YouTubeEmbedPlayer
@@ -1837,6 +1953,17 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
             text={swipeTransitionLine.text}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {leavingSolidRoll ? (
+          <SolidThresholdRollOverlay
+            key="solid-threshold-roll"
+            montessoriHex={leavingSolidRoll.montessoriHex}
+            character={leavingSolidRoll.character}
+            reduceMotion={swipeHintsReduceMotion === true}
+          />
+        ) : null}
       </AnimatePresence>
 
       {/* No extra YouTube embed preloads: several concurrent embeds break playback on many phones after 1–2 videos. */}
@@ -2041,7 +2168,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
               />
             </svg>
           </motion.div>
-          {displayedLikeCount != null && displayedLikeCount > 0 ? (
+          {displayedLikeCount != null ? (
             <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
               {displayedLikeCount}
             </span>
@@ -2062,7 +2189,13 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
               strokeLinejoin="round"
             />
           </svg>
-          <span className="text-[10px] font-semibold text-white/90 drop-shadow">Save</span>
+          {displayedSaveCount != null ? (
+            <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
+              {displayedSaveCount}
+            </span>
+          ) : (
+            <span className="text-[10px] font-semibold text-white/90 drop-shadow">Save</span>
+          )}
         </button>
         <button
           type="button"
@@ -2085,7 +2218,13 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
               strokeLinejoin="round"
             />
           </svg>
-          <span className="text-[10px] font-semibold text-white/90 drop-shadow">Share</span>
+          {displayedShareCount != null ? (
+            <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
+              {displayedShareCount}
+            </span>
+          ) : (
+            <span className="text-[10px] font-semibold text-white/90 drop-shadow">Share</span>
+          )}
         </button>
       </div>
       ) : null}
@@ -2136,7 +2275,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           aria-live="polite"
           className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[56] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
         >
-          Signed in — your learning progress is saved to the cloud.
+          {SIGNED_IN_CLOUD_PROGRESS_MESSAGE}
         </div>
       ) : null}
 

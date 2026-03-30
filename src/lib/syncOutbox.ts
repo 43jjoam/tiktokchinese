@@ -77,7 +77,16 @@ async function getDueJobs(): Promise<SyncOutboxJob[]> {
     req.onsuccess = () => {
       const all = (req.result as SyncOutboxJob[]) ?? []
       const now = Date.now()
-      resolve(all.filter((j) => j.nextRetryAt <= now).sort((a, b) => a.createdAt - b.createdAt))
+      const priority = (kind: SyncOutboxJobKind) => (kind === 'record-engagement' ? 0 : 1)
+      resolve(
+        all
+          .filter((j) => j.nextRetryAt <= now)
+          .sort((a, b) => {
+            const p = priority(a.kind) - priority(b.kind)
+            if (p !== 0) return p
+            return a.createdAt - b.createdAt
+          }),
+      )
     }
     req.onerror = () => reject(req.error ?? new Error('idb_getall_failed'))
   })
@@ -149,6 +158,10 @@ async function sendJob(job: SyncOutboxJob): Promise<{ ok: boolean; retriable: bo
       body: JSON.stringify(job.body),
       keepalive: job.kind === 'record-session-summary',
     })
+    const errBody = !res.ok ? await res.text().catch(() => '') : ''
+    if (import.meta.env.DEV && !res.ok) {
+      console.warn('[syncOutbox]', job.kind, res.status, errBody.slice(0, 220))
+    }
     if (res.ok) return { ok: true, retriable: false }
     if (res.status === 401 || res.status === 403) return { ok: false, retriable: true }
     if (res.status >= 500 || res.status === 429) return { ok: false, retriable: true }
@@ -167,7 +180,7 @@ export async function flushSyncOutbox(): Promise<void> {
   if (flushing) return
   flushing = true
   try {
-    for (;;) {
+    for (let iter = 0; iter < 500; iter++) {
       const batch = await getDueJobs()
       if (batch.length === 0) break
       const job = batch[0]
@@ -189,7 +202,8 @@ export async function flushSyncOutbox(): Promise<void> {
         nextRetryAt: Date.now() + backoffMs(job.attempts),
       }
       await updateJob(next)
-      break
+      /** Keep flushing: a stuck session-summary must not block record-engagement in this same run. */
+      continue
     }
   } finally {
     flushing = false

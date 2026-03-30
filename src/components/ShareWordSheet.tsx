@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { WordMetadata } from '../lib/types'
 import {
   IconEmail,
@@ -12,10 +12,12 @@ import {
 } from './ShareChannelIcons'
 import {
   buildChallengeShareText,
+  buildChallengeShareTextWithoutUrl,
   buildShareUrl,
   engagementShareSuccess,
   engagementShareTap,
   isNavigatorShareSupported,
+  normalizeGiftShareUrl,
   recordLocalShare,
   resolveShareUrlForWord,
   type ShareSuccessMethod,
@@ -131,6 +133,11 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
     }
   }, [open, word])
 
+  const giftLinkDisplayHref = useMemo(() => {
+    if (!word) return ''
+    return normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
+  }, [word, shareUrl])
+
   useEffect(() => {
     if (!open) setInstagramToast(null)
   }, [open])
@@ -157,7 +164,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
   /** Open share target in the same user gesture (no await before open) so popups are not blocked. */
   const runFacebook = useCallback(() => {
     if (!word) return
-    const pageUrl = shareUrl || buildShareUrl(word.word_id)
+    const pageUrl = normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
     const fbUrl = facebookSharerUrl(pageUrl)
     openExternalUrlInNewTab(fbUrl)
     void (async () => {
@@ -168,7 +175,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
 
   const runWhatsApp = useCallback(() => {
     if (!word) return
-    const pageUrl = shareUrl || buildShareUrl(word.word_id)
+    const pageUrl = normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
     const text = buildChallengeShareText(word, pageUrl)
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`
     openExternalUrlInNewTab(waUrl)
@@ -180,7 +187,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
 
   const runSms = useCallback(() => {
     if (!word) return
-    const pageUrl = shareUrl || buildShareUrl(word.word_id)
+    const pageUrl = normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
     const body = buildChallengeShareText(word, pageUrl)
     window.location.href = `sms:?&body=${encodeURIComponent(body)}`
     void (async () => {
@@ -191,7 +198,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
 
   const runEmail = useCallback(() => {
     if (!word) return
-    const pageUrl = shareUrl || buildShareUrl(word.word_id)
+    const pageUrl = normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
     const subject = `Chinese Flash — ${word.character}`
     const body = buildChallengeShareText(word, pageUrl)
     window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
@@ -209,7 +216,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
   const runInstagramPaste = useCallback(() => {
     if (!word) return
     setInstagramToast(null)
-    const url = shareUrl || buildShareUrl(word.word_id)
+    const url = normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
     const text = buildChallengeShareText(word, url)
     void copyTextForShare(text).then((ok) => {
       if (!ok) {
@@ -237,7 +244,7 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
   const runCopyLink = useCallback(async () => {
     if (!word) return
     await primeChannel()
-    const url = shareUrl || buildShareUrl(word.word_id)
+    const url = normalizeGiftShareUrl(shareUrl || buildShareUrl(word.word_id))
     try {
       await navigator.clipboard.writeText(url)
       await engagementShareSuccess(word, 'copy')
@@ -250,12 +257,13 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
   const runSystemShare = useCallback(async () => {
     if (!word) return
     const url = shareUrl || buildShareUrl(word.word_id)
+    const normalized = normalizeGiftShareUrl(url)
     try {
       if (typeof navigator.share === 'function') {
         await navigator.share({
           title: 'Chinese Flash',
-          text: buildChallengeShareText(word, url),
-          url,
+          text: buildChallengeShareTextWithoutUrl(word),
+          url: normalized,
         })
         await primeChannel()
         await engagementShareSuccess(word, 'web_share')
@@ -334,6 +342,20 @@ export function ShareWordSheet({ open, word, onClose }: Props) {
                 {word.character}
               </span>
             </h2>
+
+            <div className="mt-5 px-1">
+              <p className="text-center text-[11px] font-medium uppercase tracking-wide text-white/40">
+                Gift link
+              </p>
+              <a
+                href={giftLinkDisplayHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 block break-all rounded-xl border border-sky-500/35 bg-sky-500/10 px-3 py-3 text-center text-sm font-semibold leading-snug text-sky-300 underline decoration-sky-400/60 underline-offset-2 active:bg-sky-500/20"
+              >
+                {giftLinkDisplayHref}
+              </a>
+            </div>
 
             <div className="mt-8 pb-1">
               <div className="-mx-1 flex flex-nowrap gap-1 overflow-x-auto overscroll-x-contain px-1 pb-2 [-webkit-overflow-scrolling:touch]">

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
-import { corsHeaders, DEFAULT_ALLOWED_ORIGINS } from "../_shared/cors.ts";
+import { corsHeadersForRequestOrigin, isOriginAllowed } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -7,16 +7,18 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
 
+  const ch = corsHeadersForRequestOrigin(origin);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    return new Response(null, { status: 204, headers: ch });
   }
 
   if (req.method !== "GET") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders(origin) });
+    return new Response("Method not allowed", { status: 405, headers: ch });
   }
 
-  if (!origin || !DEFAULT_ALLOWED_ORIGINS.includes(origin)) {
-    return new Response("Forbidden", { status: 403, headers: corsHeaders(origin) });
+  if (!isOriginAllowed(origin)) {
+    return new Response("Forbidden", { status: 403, headers: ch });
   }
 
   const url = new URL(req.url);
@@ -24,27 +26,13 @@ Deno.serve(async (req) => {
   if (!word_id || word_id.length > 100) {
     return new Response(JSON.stringify({ error: "bad_word_id" }), {
       status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-  const { data: wordOk, error: wordErr } = await supabase
-    .from("words")
-    .select("id")
-    .eq("id", word_id)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (wordErr || !wordOk) {
-    return new Response(JSON.stringify({ error: "unknown_word" }), {
-      status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-    });
-  }
-
-  const [likesRes, savesRes] = await Promise.all([
+  const [likesRes, savesRes, sharesRes] = await Promise.all([
     supabase
       .from("engagement_events")
       .select("*", { count: "exact", head: true })
@@ -57,13 +45,19 @@ Deno.serve(async (req) => {
       .eq("word_id", word_id)
       .eq("type", "save")
       .eq("is_deleted", false),
+    supabase
+      .from("engagement_events")
+      .select("*", { count: "exact", head: true })
+      .eq("word_id", word_id)
+      .eq("type", "share_success")
+      .eq("is_deleted", false),
   ]);
 
-  if (likesRes.error || savesRes.error) {
-    console.error("get-counts", likesRes.error, savesRes.error);
+  if (likesRes.error || savesRes.error || sharesRes.error) {
+    console.error("get-counts", likesRes.error, savesRes.error, sharesRes.error);
     return new Response(JSON.stringify({ error: "count_failed" }), {
       status: 500,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -71,13 +65,14 @@ Deno.serve(async (req) => {
     JSON.stringify({
       likes: likesRes.count ?? 0,
       saves: savesRes.count ?? 0,
+      shares: sharesRes.count ?? 0,
     }),
     {
       status: 200,
       headers: {
-        ...corsHeaders(origin),
+        ...ch,
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=30",
+        "Cache-Control": "private, no-store",
       },
     },
   );

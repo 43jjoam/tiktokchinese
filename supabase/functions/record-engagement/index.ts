@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.100.0";
-import { corsHeaders, DEFAULT_ALLOWED_ORIGINS } from "../_shared/cors.ts";
+import { corsHeadersForRequestOrigin, isOriginAllowed } from "../_shared/cors.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -29,17 +29,18 @@ type Body = {
 
 Deno.serve(async (req) => {
   const origin = req.headers.get("origin");
+  const ch = corsHeadersForRequestOrigin(origin);
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    return new Response(null, { status: 204, headers: ch });
   }
 
   if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405, headers: corsHeaders(origin) });
+    return new Response("Method not allowed", { status: 405, headers: ch });
   }
 
-  if (!origin || !DEFAULT_ALLOWED_ORIGINS.includes(origin)) {
-    return new Response("Forbidden", { status: 403, headers: corsHeaders(origin) });
+  if (!isOriginAllowed(origin)) {
+    return new Response("Forbidden", { status: 403, headers: ch });
   }
 
   let body: Body;
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
   } catch {
     return new Response(JSON.stringify({ error: "invalid_json" }), {
       status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -56,14 +57,14 @@ Deno.serve(async (req) => {
   if (!op || !word_id || !clip_key || !device_hash) {
     return new Response(JSON.stringify({ error: "missing_fields" }), {
       status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
   if (word_id.length > 100 || clip_key.length > 200 || !validDeviceHash(device_hash)) {
     return new Response(JSON.stringify({ error: "invalid_shape" }), {
       status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
@@ -75,20 +76,6 @@ Deno.serve(async (req) => {
   if (bearer) {
     const { data: userData, error: userErr } = await supabase.auth.getUser(bearer);
     if (!userErr && userData?.user?.id) userId = userData.user.id;
-  }
-
-  const { data: wordOk, error: wordErr } = await supabase
-    .from("words")
-    .select("id")
-    .eq("id", word_id)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (wordErr || !wordOk) {
-    return new Response(JSON.stringify({ error: "unknown_word" }), {
-      status: 400,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-    });
   }
 
   const baseRow = {
@@ -142,19 +129,19 @@ Deno.serve(async (req) => {
     } else {
       return new Response(JSON.stringify({ error: "unknown_op" }), {
         status: 400,
-        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+        headers: { ...ch, "Content-Type": "application/json" },
       });
     }
   } catch (e) {
     console.error("record-engagement", e);
     return new Response(JSON.stringify({ error: "write_failed" }), {
       status: 500,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+      headers: { ...ch, "Content-Type": "application/json" },
     });
   }
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
-    headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+    headers: { ...ch, "Content-Type": "application/json" },
   });
 });

@@ -136,7 +136,12 @@ export function EngagementWordPlayer({
     disableSrsScoring && browseWordList && browseWordList.length > 0,
   )
 
-  const [browseIdx, setBrowseIdx] = useState(0)
+  /** Must match picked `word` on first paint — `useState(0)` showed list[0] until an effect ran (wrong clip). */
+  const [browseIdx, setBrowseIdx] = useState(() => {
+    if (!disableSrsScoring || !browseWordList?.length) return 0
+    const i = browseWordList.findIndex((w) => w.word_id === word.word_id)
+    return i >= 0 ? i : 0
+  })
 
   useEffect(() => {
     if (!vaultBrowse) return
@@ -172,14 +177,23 @@ export function EngagementWordPlayer({
   }, [activeWord.youtube_url])
 
   const [youtubeFallback, setYoutubeFallback] = useState(false)
-  const ytId = useMemo(() => {
-    if (!extractedYoutubeId) return null
-    if (activeWord.use_video_url) return youtubeFallback ? extractedYoutubeId : null
-    return extractedYoutubeId
-  }, [activeWord.use_video_url, extractedYoutubeId, youtubeFallback])
 
   const needsSignedNativeUrl = Boolean(activeWord.use_video_url && activeWord.video_storage_path?.trim())
   const [nativePlaybackSrc, setNativePlaybackSrc] = useState<string | null>(null)
+
+  const ytId = useMemo(() => {
+    if (!extractedYoutubeId) return null
+    if (!activeWord.use_video_url) return extractedYoutubeId
+    if (youtubeFallback) return extractedYoutubeId
+    if (needsSignedNativeUrl && !nativePlaybackSrc) return extractedYoutubeId
+    return null
+  }, [
+    activeWord.use_video_url,
+    extractedYoutubeId,
+    youtubeFallback,
+    needsSignedNativeUrl,
+    nativePlaybackSrc,
+  ])
 
   useEffect(() => {
     setYoutubeFallback(false)
@@ -278,6 +292,8 @@ export function EngagementWordPlayer({
   const [liked, setLiked] = useState(() => getLocalLikedWordIds().includes(word.word_id))
   const [saved, setSaved] = useState(() => getLocalSavedWordIds().includes(word.word_id))
   const [likeCount, setLikeCount] = useState<number | null>(null)
+  const [saveCount, setSaveCount] = useState<number | null>(null)
+  const [shareCount, setShareCount] = useState<number | null>(null)
   const [backendCountsOk, setBackendCountsOk] = useState(false)
   const likedRef = useRef(false)
   likedRef.current = liked
@@ -296,6 +312,8 @@ export function EngagementWordPlayer({
     setLiked(snap.liked || localLiked)
     setSaved(snap.saved || localSaved)
     setLikeCount(snap.likeCount)
+    setSaveCount(snap.saveCount)
+    setShareCount(snap.shareCount)
     setBackendCountsOk(snap.backendCountsOk)
   }, [])
 
@@ -308,6 +326,8 @@ export function EngagementWordPlayer({
     setLiked(getLocalLikedWordIds().includes(wid))
     setSaved(getLocalSavedWordIds().includes(wid))
     setLikeCount(null)
+    setSaveCount(null)
+    setShareCount(null)
     setBackendCountsOk(false)
     let id2 = 0
     const id1 = requestAnimationFrame(() => {
@@ -427,6 +447,9 @@ export function EngagementWordPlayer({
   const handleSaveToggle = useCallback(() => {
     const next = !savedRef.current
     setSaved(next)
+    if (backendCountsOkRef.current) {
+      setSaveCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
+    }
     void engagementSetSave(wordRef.current, next).then(() => refreshEngagement())
   }, [refreshEngagement])
 
@@ -589,6 +612,9 @@ export function EngagementWordPlayer({
 
   const displayedLikeCount =
     backendCountsOk && likeCount !== null ? Math.max(likeCount, liked ? 1 : 0) : null
+  const displayedSaveCount =
+    backendCountsOk && saveCount !== null ? Math.max(saveCount, saved ? 1 : 0) : null
+  const displayedShareCount = backendCountsOk && shareCount !== null ? shareCount : null
 
   const slideTransition = { type: 'tween' as const, duration: 0.17, ease: [0.25, 0.1, 0.25, 1] as const }
 
@@ -623,7 +649,7 @@ export function EngagementWordPlayer({
         style={{ pointerEvents: 'none', backgroundColor: '#000' }}
       >
         {ytId ? (
-          <div className="relative z-[2] h-full min-h-0 w-full bg-black">
+          <div key={activeWord.word_id} className="relative z-[2] h-full min-h-0 w-full bg-black">
             <YouTubeEmbedPlayer videoId={ytId} onPlaying={markPlaybackReady} />
           </div>
         ) : needsSignedNativeUrl ? (
@@ -785,7 +811,7 @@ export function EngagementWordPlayer({
               strokeLinejoin="round"
             />
           </svg>
-          {displayedLikeCount != null && displayedLikeCount > 0 ? (
+          {displayedLikeCount != null ? (
             <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
               {displayedLikeCount}
             </span>
@@ -806,7 +832,13 @@ export function EngagementWordPlayer({
               strokeLinejoin="round"
             />
           </svg>
-          <span className="text-[10px] font-semibold text-white/90 drop-shadow">Save</span>
+          {displayedSaveCount != null ? (
+            <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
+              {displayedSaveCount}
+            </span>
+          ) : (
+            <span className="text-[10px] font-semibold text-white/90 drop-shadow">Save</span>
+          )}
         </button>
         <button
           type="button"
@@ -829,7 +861,13 @@ export function EngagementWordPlayer({
               strokeLinejoin="round"
             />
           </svg>
-          <span className="text-[10px] font-semibold text-white/90 drop-shadow">Share</span>
+          {displayedShareCount != null ? (
+            <span className="text-xs font-semibold text-white/90 drop-shadow tabular-nums">
+              {displayedShareCount}
+            </span>
+          ) : (
+            <span className="text-[10px] font-semibold text-white/90 drop-shadow">Share</span>
+          )}
         </button>
       </div>
       ) : null}

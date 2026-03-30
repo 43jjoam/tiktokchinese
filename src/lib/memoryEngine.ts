@@ -1,6 +1,7 @@
 import type { SessionSignals, TapTiming, WordMetadata, WordState, SwipeDirection } from './types'
 
-const LOOP_MS = 5000 // PRD describes ~5-second visual clip.
+/** One “loop” in session scoring (~5s clip). Exported so UI and tests stay aligned with `loopsElapsedFromMs`. */
+export const LOOP_MS = 5000
 
 // PRD: Tap timing canonical definition.
 // Early Tap: 2 loops; Late Tap: > 2 loops.
@@ -24,7 +25,10 @@ function consistencyMultiplier(hoursSinceLastSeen: number): number {
   return 1.15
 }
 
-function scoreFromSession(signals: SessionSignals): number {
+/**
+ * PRD v3 session score (before α × consistency). See `src/lib/__tests__/srsSignalMatrix.test.ts` for the matrix.
+ */
+export function scoreFromSession(signals: SessionSignals): number {
   const { swipeDirection, tapOccurred, tapTiming, loopsElapsed } = signals
 
   if (swipeDirection === 'left') {
