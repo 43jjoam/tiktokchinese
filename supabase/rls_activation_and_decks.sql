@@ -38,3 +38,27 @@ create policy "anon_select_decks"
   for select
   to anon
   using (true);
+
+-- Signed-in users use the `authenticated` role; `to anon` policies do not apply. Mirror anon so
+-- Library activation / deck metadata work with the same JWT the rest of the app uses.
+drop policy if exists "authenticated_select_activation_codes" on public.activation_codes;
+create policy "authenticated_select_activation_codes"
+  on public.activation_codes
+  for select
+  to authenticated
+  using (true);
+
+drop policy if exists "authenticated_update_redeem_activation_codes" on public.activation_codes;
+create policy "authenticated_update_redeem_activation_codes"
+  on public.activation_codes
+  for update
+  to authenticated
+  using (redeemed_by is null)
+  with check (true);
+
+drop policy if exists "authenticated_select_decks" on public.decks;
+create policy "authenticated_select_decks"
+  on public.decks
+  for select
+  to authenticated
+  using (true);

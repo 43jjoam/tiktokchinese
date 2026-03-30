@@ -1,5 +1,5 @@
 import { AnimatePresence } from 'framer-motion'
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { fetchPublicCatalogCoverUrls } from '../lib/catalogCovers'
 import { activateCode, getActivatedDecks, type DeckInfo } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT } from '../lib/deckWords'
@@ -13,6 +13,7 @@ export default function LibraryTab() {
   const [decks, setDecks] = useState<DeckInfo[]>([])
   const [openDeck, setOpenDeck] = useState<DeckInfo | null>(null)
   const [catalogCoverByKey, setCatalogCoverByKey] = useState<Record<string, string>>({})
+  const activatePendingRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -41,6 +42,7 @@ export default function LibraryTab() {
 
   const handleActivate = useCallback(async () => {
     if (!code.trim()) return
+    activatePendingRef.current += 1
     setActivating(true)
     setMessage(null)
     try {
@@ -59,7 +61,9 @@ export default function LibraryTab() {
         ok: false,
       })
     } finally {
-      setActivating(false)
+      activatePendingRef.current -= 1
+      if (activatePendingRef.current < 0) activatePendingRef.current = 0
+      if (activatePendingRef.current === 0) setActivating(false)
     }
   }, [code])
 

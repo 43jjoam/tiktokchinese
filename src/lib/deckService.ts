@@ -1,11 +1,20 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { randomUuidV4 } from './randomUuid'
+import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const rawUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim()
+const rawKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim()
+const SUPABASE_URL =
+  rawUrl && rawUrl.length > 0 ? rawUrl.replace(/\/+$/, '') : undefined
+const SUPABASE_ANON_KEY = rawKey && rawKey.length > 0 ? rawKey : undefined
 const LOCAL_KEY = 'tiktokchinese_activated_decks'
 
+/** Edge Function `redeem-activation` (service role); falls back to direct PostgREST if missing or errors. */
+const REDEEM_EDGE_TIMEOUT_MS = 22_000
+
 let supabase: SupabaseClient | null = null
+/** Anon REST only: no user JWT. Avoids auth refresh / session queues blocking activation when signed in. */
+let supabaseLibraryApi: SupabaseClient | null = null
 if (SUPABASE_URL && SUPABASE_ANON_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
@@ -15,6 +24,14 @@ if (SUPABASE_URL && SUPABASE_ANON_KEY) {
       flowType: 'implicit',
       detectSessionInUrl: true,
       persistSession: true,
+    },
+  })
+  supabaseLibraryApi = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      storageKey: 'tiktokchinese_library_anon',
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
   })
 }
@@ -60,7 +77,64 @@ function saveLocalDecks(decks: DeckInfo[]) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(decks))
 }
 
-const ACTIVATE_TIMEOUT_MS = 45_000
+function persistActivatedDeckIfNeeded(deck: DeckInfo): void {
+  const local = getLocalDecks()
+  if (!local.some((d) => d.id === deck.id)) {
+    local.push(deck)
+    saveLocalDecks(local)
+  }
+}
+
+/**
+ * Prefer Edge Function (service role, no browser RLS). Returns null → caller uses direct PostgREST.
+ */
+async function redeemActivationViaEdgeFunction(
+  trimmed: string,
+  deviceId: string,
+): Promise<{ success: boolean; deck?: DeckInfo; error?: string } | null> {
+  const base = getSupabaseFunctionsBaseUrl()
+  const anon = SUPABASE_ANON_KEY
+  if (!base || !anon) return null
+
+  const ac = new AbortController()
+  const tid = setTimeout(() => ac.abort(), REDEEM_EDGE_TIMEOUT_MS)
+  try {
+    const res = await fetch(`${base}/redeem-activation`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anon}`,
+        apikey: anon,
+      },
+      body: JSON.stringify({ code: trimmed, device_id: deviceId }),
+      signal: ac.signal,
+    })
+
+    const text = await res.text()
+    if (res.status === 404 || res.status === 429 || res.status >= 500) return null
+
+    let parsed: { success?: boolean; deck?: DeckInfo; error?: string } = {}
+    try {
+      if (text) parsed = JSON.parse(text) as typeof parsed
+    } catch {
+      return null
+    }
+
+    if (!res.ok) {
+      return { success: false, error: parsed.error ?? 'Activation failed. Try again.' }
+    }
+
+    if (parsed.success && parsed.deck) return { success: true, deck: parsed.deck }
+    return { success: false, error: parsed.error ?? 'Activation failed.' }
+  } catch {
+    return null
+  } finally {
+    clearTimeout(tid)
+  }
+}
+
+/* Up to ~3 sequential REST calls when falling back to direct client. */
+const ACTIVATE_TIMEOUT_MS = 55_000
 
 /** Paste-friendly variants so email/UI casing and spaces still match the DB row. */
 function activationCodeLookupValues(trimmed: string): string[] {
@@ -99,6 +173,10 @@ function formatActivateSupabaseError(
     return `Could not ${step} this code: network or bad Supabase URL. Check VITE_SUPABASE_URL and that the project is running.`
   }
 
+  if (/abort|aborted|signal|timed?\s*out/i.test(combined)) {
+    return `Could not ${step} this code: the request to Supabase took too long or was blocked. Try another network, disable VPN/ad blockers for this site, and confirm your Supabase project is not paused (Dashboard → project status).`
+  }
+
   return msg ? `Could not ${step} this code: ${msg}` : `Could not ${step} this code. Try again.`
 }
 
@@ -106,7 +184,7 @@ function activateCodeTimedOutError(): { success: false; error: string } {
   return {
     success: false,
     error:
-      'Request timed out. Check your network, VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY, and that Supabase allows anon read/update on activation_codes and read on decks.',
+      'Activation is taking too long. Open Supabase Dashboard and confirm the project is running (not paused). On your phone or laptop, try Wi‑Fi vs cellular, turn off VPN, and allow requests to *.supabase.co. Production builds must include VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY. If it still fails, run supabase/rls_activation_and_decks.sql so anon (and authenticated) can SELECT/UPDATE activation_codes and SELECT decks.',
   }
 }
 
@@ -114,12 +192,13 @@ async function activateCodeInner(
   trimmed: string,
   deviceId: string,
 ): Promise<{ success: boolean; deck?: DeckInfo; error?: string }> {
-  if (!supabase) {
+  const db = supabaseLibraryApi
+  if (!db) {
     return { success: false, error: 'Activation service is not configured.' }
   }
 
   const candidates = activationCodeLookupValues(trimmed)
-  const { data: rows, error: fetchErr } = await supabase
+  const { data: rows, error: fetchErr } = await db
     .from('activation_codes')
     .select('id, code, deck_id, redeemed_by')
     .in('code', candidates)
@@ -143,7 +222,7 @@ async function activateCodeInner(
     return { success: false, error: 'This code has already been used.' }
   }
   if (codeRow.redeemed_by === deviceId) {
-    const { data: deck, error: deckErr } = await supabase
+    const { data: deck, error: deckErr } = await db
       .from('decks')
       .select('id, name, cover_image_url, shopify_url')
       .eq('id', codeRow.deck_id)
@@ -153,14 +232,14 @@ async function activateCodeInner(
     return { success: false, error: 'Deck not found.' }
   }
 
-  const { error: updateErr } = await supabase
+  const { error: updateErr } = await db
     .from('activation_codes')
     .update({ redeemed_by: deviceId, redeemed_at: new Date().toISOString() })
     .eq('id', codeRow.id)
 
   if (updateErr) return { success: false, error: formatActivateSupabaseError('save', updateErr) }
 
-  const { data: deck, error: deckErr } = await supabase
+  const { data: deck, error: deckErr } = await db
     .from('decks')
     .select('id, name, cover_image_url, shopify_url')
     .eq('id', codeRow.deck_id)
@@ -170,11 +249,7 @@ async function activateCodeInner(
   if (!deck) return { success: false, error: 'Deck not found.' }
 
   const deckInfo = deck as DeckInfo
-  const local = getLocalDecks()
-  if (!local.some((d) => d.id === deckInfo.id)) {
-    local.push(deckInfo)
-    saveLocalDecks(local)
-  }
+  persistActivatedDeckIfNeeded(deckInfo)
 
   return { success: true, deck: deckInfo }
 }
@@ -182,13 +257,19 @@ async function activateCodeInner(
 export async function activateCode(
   code: string,
 ): Promise<{ success: boolean; deck?: DeckInfo; error?: string }> {
-  if (!supabase) {
+  if (!supabaseLibraryApi) {
     return { success: false, error: 'Activation service is not configured.' }
   }
 
   const deviceId = getDeviceId()
   const trimmed = code.trim()
   if (!trimmed) return { success: false, error: 'Please enter a code.' }
+
+  const edge = await redeemActivationViaEdgeFunction(trimmed, deviceId)
+  if (edge !== null) {
+    if (edge.success && edge.deck) persistActivatedDeckIfNeeded(edge.deck)
+    return edge
+  }
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -214,12 +295,13 @@ export async function activateCode(
  * `saveLocalDecks([])` — that used to wipe a successful activation from localStorage.
  */
 export async function getActivatedDecks(): Promise<DeckInfo[]> {
-  if (!supabase) return getLocalDecks()
+  const db = supabaseLibraryApi
+  if (!db) return getLocalDecks()
 
   const deviceId = getDeviceId()
   const local = getLocalDecks()
 
-  const { data: codes } = await supabase
+  const { data: codes } = await db
     .from('activation_codes')
     .select('deck_id')
     .eq('redeemed_by', deviceId)
@@ -227,7 +309,7 @@ export async function getActivatedDecks(): Promise<DeckInfo[]> {
   if (!codes || codes.length === 0) return local
 
   const deckIds = [...new Set(codes.map((c: { deck_id: string }) => c.deck_id))]
-  const { data: decks } = await supabase
+  const { data: decks } = await db
     .from('decks')
     .select('id, name, cover_image_url, shopify_url')
     .in('id', deckIds)

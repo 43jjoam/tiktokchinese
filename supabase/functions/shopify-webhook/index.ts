@@ -4,6 +4,10 @@ const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY")!;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SHOPIFY_WEBHOOK_SECRET = Deno.env.get("SHOPIFY_WEBHOOK_SECRET") ?? "";
+/** Must be a domain verified in Resend. Default matches the historical sender (before chineseflash.com). */
+const RESEND_FROM =
+  Deno.env.get("RESEND_FROM")?.trim() ||
+  "Bestling <noreply@bestling.net>";
 
 const SKU_TO_DECK: Record<string, string> = {
   "hsk1": "4d0a4205-8770-4c0e-ad4c-90ea8401eea9",
@@ -78,7 +82,7 @@ async function sendEmail(to: string, code: string, deckName: string) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: "Chinese Flash <noreply@chineseflash.com>",
+      from: RESEND_FROM,
       to: [to],
       subject: `Your activation code for ${deckName}`,
       html: `

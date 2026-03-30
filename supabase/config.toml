@@ -440,6 +440,12 @@ enabled = true
 # Same as record-engagement: browser sends anon JWT: session rows must not block the outbox queue.
 verify_jwt = false
 entrypoint = "./functions/record-session-summary/index.ts"
+
+[functions.redeem-activation]
+enabled = true
+# Library redeem: CORS + service role inside the function (no browser RLS / auth client quirks).
+verify_jwt = false
+entrypoint = "./functions/redeem-activation/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/shopify-webhook/*.html" ]
