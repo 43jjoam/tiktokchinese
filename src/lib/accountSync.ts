@@ -1,6 +1,7 @@
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
 import { getDeviceHashForEngagement } from './deviceHash'
 import { getSupabaseClient } from './deckService'
+import { hydrateEngagementLocalListsFromCloud } from './engagementService'
 import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
 import {
   clearCurrentWordId,
@@ -331,7 +332,7 @@ export async function mergeDeviceEngagementAfterSignIn(): Promise<void> {
   if (!session?.access_token) return
   const device_hash = await getDeviceHashForEngagement()
   try {
-    await fetch(`${base}/merge-device-engagement`, {
+    const res = await fetch(`${base}/merge-device-engagement`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -340,16 +341,62 @@ export async function mergeDeviceEngagementAfterSignIn(): Promise<void> {
       },
       body: JSON.stringify({ device_hash }),
     })
-  } catch {
-    /* non-fatal */
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.warn('[cloudSync] merge-device-engagement HTTP', res.status, body.slice(0, 200))
+    }
+  } catch (e) {
+    console.warn('[cloudSync] merge-device-engagement network error', e)
   }
 }
 
-export async function syncCloudProfileAfterAuth(userId: string): Promise<{
+export type SyncCloudProfileAfterAuthResult = {
   uploaded: boolean
   merged: boolean
   uploadError?: string
-}> {
+  /** After sync: valid `user_learning_profiles` row for current session */
+  hasRemoteProfile: boolean
+  /** Whether local had study progress before this run (word sessions / first-20 meta) */
+  hadLocalStudyProgressAtStart: boolean
+}
+
+async function finalizeCloudProfileSync(
+  userId: string,
+  hadLocalStudyProgressAtStart: boolean,
+  partial: Pick<SyncCloudProfileAfterAuthResult, 'uploaded' | 'merged' | 'uploadError'>,
+): Promise<SyncCloudProfileAfterAuthResult> {
+  try {
+    const { liked, saved } = await hydrateEngagementLocalListsFromCloud()
+    if (import.meta.env.DEV && (liked > 0 || saved > 0)) {
+      console.log('[cloudSync] hydrated Profile lists from engagement_events', { liked, saved })
+    }
+  } catch (e) {
+    console.warn('[cloudSync] hydrateEngagementLocalListsFromCloud failed', e)
+  }
+
+  const remoteRow = await fetchRemoteLearningProfile()
+  const hasRemoteProfile = remoteRow !== null
+  if (import.meta.env.DEV) {
+    console.log('[cloudSync] syncCloudProfileAfterAuth finished', userId, {
+      ...partial,
+      hasRemoteProfile,
+      hadLocalStudyProgressAtStart,
+    })
+  }
+  if (partial.uploadError) {
+    console.warn('[cloudSync] profile upload error:', partial.uploadError)
+  }
+  return {
+    uploaded: partial.uploaded,
+    merged: partial.merged,
+    uploadError: partial.uploadError,
+    hasRemoteProfile,
+    hadLocalStudyProgressAtStart,
+  }
+}
+
+export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncCloudProfileAfterAuthResult> {
+  const hadLocalStudyProgressAtStart = localLearningProgressNeedsUploadFirst()
   await mergeDeviceEngagementAfterSignIn()
   let local = loadPersistedState()
   const prevCloudUid = local.meta.lastCloudProfileUserId
@@ -370,7 +417,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<{
       })
       notifyPersistedStateReplaced()
       setProfileUploadDoneUserId(userId)
-      return { uploaded: false, merged: true }
+      return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, { uploaded: false, merged: true })
     }
     /**
      * No `user_learning_profiles` row for this auth user. Previously we wiped local storage here.
@@ -424,14 +471,18 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<{
   if (localFirst) {
     const up = await uploadLearningProfileWithLocalMeta()
     if (!up.ok) {
-      return { uploaded: false, merged: false, uploadError: up.error }
+      return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, {
+        uploaded: false,
+        merged: false,
+        uploadError: up.error,
+      })
     }
     setProfileUploadDoneUserId(userId)
-    return { uploaded: true, merged: false }
+    return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, { uploaded: true, merged: false })
   }
 
   const merged = await mergeRemoteProfileIfNewer(userId)
-  return { uploaded: false, merged }
+  return await finalizeCloudProfileSync(userId, hadLocalStudyProgressAtStart, { uploaded: false, merged })
 }
 
 export async function fetchRemoteLearningProfile(): Promise<

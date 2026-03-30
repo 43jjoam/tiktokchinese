@@ -791,6 +791,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   /** When true, modal opens on the “link sent” step (guest hit swipe cap with link already sent). */
   const [saveProgressForceLinkSent, setSaveProgressForceLinkSent] = useState(false)
   const [cloudSavedToast, setCloudSavedToast] = useState(false)
+  /** Shown when sign-in sync did not produce cloud profile data (or upload failed). */
+  const [cloudBackupHint, setCloudBackupHint] = useState<string | null>(null)
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -811,13 +813,32 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (!user?.id) return
     stripSupabaseOAuthParamsFromUrl()
     if (user.email) setLastUsedAccountEmail(user.email)
-    const r = await syncCloudProfileAfterAuth(user.id)
-    if (r.uploaded || r.merged) {
-      setSaveProgressOpen(false)
-      setSaveProgressForceLinkSent(false)
-      notifyCloudProfileSaved()
-      setCloudSavedToast(true)
-      window.setTimeout(() => setCloudSavedToast(false), 9000)
+    setCloudBackupHint(null)
+    try {
+      const r = await syncCloudProfileAfterAuth(user.id)
+      if (r.uploadError) {
+        console.warn('[cloudSync] profile upload failed:', r.uploadError)
+        setCloudBackupHint(
+          "Couldn’t save your progress to the cloud. Check your connection, then open Profile and tap Sync now.",
+        )
+        return
+      }
+      if (r.uploaded || r.merged) {
+        setSaveProgressOpen(false)
+        setSaveProgressForceLinkSent(false)
+        notifyCloudProfileSaved()
+        setCloudSavedToast(true)
+        window.setTimeout(() => setCloudSavedToast(false), 9000)
+        return
+      }
+      if (!r.hasRemoteProfile) {
+        setCloudBackupHint(
+          'No cloud backup yet for this account. Keep studying and we’ll sync your progress — or open Profile and tap Sync now.',
+        )
+      }
+    } catch (e) {
+      console.error('[cloudSync] syncCloudProfileAfterAuth threw', e)
+      setCloudBackupHint('Cloud sync hit an error. Try Profile → Sync now.')
     }
   }, [])
 
@@ -2116,6 +2137,23 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[56] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
         >
           Signed in — your learning progress is saved to the cloud.
+        </div>
+      ) : null}
+
+      {cloudBackupHint ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-auto fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[56] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-amber-400/40 bg-amber-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-amber-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-amber-400/25 backdrop-blur-sm"
+        >
+          <p className="pr-1">{cloudBackupHint}</p>
+          <button
+            type="button"
+            onClick={() => setCloudBackupHint(null)}
+            className="mt-2 text-xs font-bold uppercase tracking-wide text-amber-200/90 underline-offset-2 hover:underline"
+          >
+            Dismiss
+          </button>
         </div>
       ) : null}
     </div>

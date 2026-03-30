@@ -45,6 +45,70 @@ function persistIdList(key: string, ids: string[]) {
   notifyEngagementLocalChanged()
 }
 
+/** Server order first, then local-only ids (same device, not yet on server). */
+function mergeServerAndLocalWordOrder(serverFirst: string[], localExisting: string[]): string[] {
+  const seen = new Set<string>(serverFirst)
+  const out = [...serverFirst]
+  for (const id of localExisting) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out.slice(0, MAX_RECENT_IDS)
+}
+
+/**
+ * After sign-in + merge-device-engagement, rebuild Profile liked/saved lists from `engagement_events`
+ * so a fresh browser/device shows the same grid as the server (local lists are otherwise empty).
+ */
+export async function hydrateEngagementLocalListsFromCloud(): Promise<{ liked: number; saved: number }> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { liked: 0, saved: 0 }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  const uid = session?.user?.id
+  if (!uid) return { liked: 0, saved: 0 }
+
+  const fetchOrdered = async (type: 'like' | 'save') => {
+    const { data, error } = await supabase
+      .from('engagement_events')
+      .select('word_id, created_at')
+      .eq('user_id', uid)
+      .eq('type', type)
+      .eq('is_deleted', false)
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      if (import.meta.env.DEV) console.warn('[engageHydrate]', type, error.message)
+      return [] as string[]
+    }
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const row of data ?? []) {
+      const w = typeof row.word_id === 'string' ? row.word_id : ''
+      if (!w || seen.has(w)) continue
+      seen.add(w)
+      out.push(w)
+    }
+    return out
+  }
+
+  const [likedIds, savedIds] = await Promise.all([fetchOrdered('like'), fetchOrdered('save')])
+  let liked = 0
+  let saved = 0
+  if (likedIds.length > 0) {
+    persistIdList(LOCAL_LIKED, mergeServerAndLocalWordOrder(likedIds, parseIdList(LOCAL_LIKED)))
+    liked = likedIds.length
+  }
+  if (savedIds.length > 0) {
+    persistIdList(LOCAL_SAVED, mergeServerAndLocalWordOrder(savedIds, parseIdList(LOCAL_SAVED)))
+    saved = savedIds.length
+  }
+  return { liked, saved }
+}
+
 function getLikedIdsOrdered(): string[] {
   return parseIdList(LOCAL_LIKED)
 }
