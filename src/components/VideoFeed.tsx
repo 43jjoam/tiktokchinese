@@ -52,6 +52,8 @@ import {
   ACTIVATED_DECKS_CHANGED_EVENT,
   buildHomeFeedWords,
   getWordsForDeck,
+  lookupWordMetadataById,
+  mergeDeepLinkIntoFeed,
 } from '../lib/deckWords'
 import { getSwipeEncouragementBundle, resolveSwipeEncouragementLang } from '../lib/swipeEncouragement'
 import { resolveCharacterCompounds } from '../lib/characterCompounds'
@@ -809,6 +811,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const [words, setWords] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
   const [activatedDecks, setActivatedDecks] = useState<DeckInfo[]>([])
   const [activatedDecksKnown, setActivatedDecksKnown] = useState(false)
+  /** Keeps a shared / gifted word in the feed after `buildHomeFeedWords` refreshes (e.g. not in CC1 until Library activated). */
+  const deepLinkWordIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -817,7 +821,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         if (cancelled) return
         setActivatedDecks(decks)
         setActivatedDecksKnown(true)
-        setWords(buildHomeFeedWords(decks))
+        setWords(() => {
+          const base = buildHomeFeedWords(decks)
+          return mergeDeepLinkIntoFeed(base, deepLinkWordIdRef.current)
+        })
       })
     }
     refreshFeedWords()
@@ -1073,9 +1080,18 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const sessionVideoIndexRef = useRef(sessionVideoIndex)
   sessionVideoIndexRef.current = sessionVideoIndex
   const [currentWordId, setCurrentWordId] = useState(() => {
+    const initialFeed = buildHomeFeedWords([])
+    try {
+      const wParam = new URLSearchParams(window.location.search).get('w')?.trim()
+      if (wParam && lookupWordMetadataById(wParam)) {
+        return wParam
+      }
+    } catch {
+      /* ignore */
+    }
     const saved = loadCurrentWordId()
-    if (saved && words.some((w) => w.word_id === saved)) return saved
-    return pickRandomWord(words).word_id
+    if (saved && initialFeed.some((w) => w.word_id === saved)) return saved
+    return pickRandomWord(initialFeed).word_id
   })
   /** Signed URL from `redeem-gift` when opening `?g=<token>` (same clip as sender). */
   const [giftPlayback, setGiftPlayback] = useState<{ wordId: string; url: string } | null>(null)
@@ -1083,13 +1099,21 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const currentWord = useMemo(() => {
     const found = words.find((w) => w.word_id === currentWordId)
     if (found) return found
+    const fromCatalog = lookupWordMetadataById(currentWordId)
+    if (fromCatalog) return fromCatalog
     return pickRandomWord(words)
   }, [words, currentWordId])
 
   useEffect(() => {
-    if (currentWordId && !words.some((w) => w.word_id === currentWordId)) {
-      setCurrentWordId(pickRandomWord(words).word_id)
+    if (!currentWordId) return
+    if (words.some((w) => w.word_id === currentWordId)) return
+    const meta = lookupWordMetadataById(currentWordId)
+    if (meta) {
+      deepLinkWordIdRef.current = currentWordId
+      setWords((prev) => mergeDeepLinkIntoFeed(prev, currentWordId))
+      return
     }
+    setCurrentWordId(pickRandomWord(words).word_id)
   }, [words, currentWordId])
 
   useEffect(() => {
@@ -1140,7 +1164,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         setGiftRedeemError(null)
         recordLocalReceivedGift(r.word_id)
         setGiftPlayback({ wordId: r.word_id, url: r.signed_url })
-        if (words.some((x) => x.word_id === r.word_id)) {
+        if (lookupWordMetadataById(r.word_id)) {
+          deepLinkWordIdRef.current = r.word_id
+          setWords((prev) => mergeDeepLinkIntoFeed(prev, r.word_id))
           setCurrentWordId(r.word_id)
         }
         clearQuery()
@@ -1148,7 +1174,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       return
     }
 
-    if (w && words.some((x) => x.word_id === w)) {
+    if (w && lookupWordMetadataById(w)) {
+      deepLinkWordIdRef.current = w
+      setWords((prev) => mergeDeepLinkIntoFeed(prev, w))
       setCurrentWordId(w)
     }
     clearQuery()

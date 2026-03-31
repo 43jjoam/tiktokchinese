@@ -1,4 +1,22 @@
 import { words as wordDataset } from '../data/words'
+
+/** Full catalog lookup — use when a deep link / gift references a word not yet in the home feed (e.g. Library deck not activated). */
+export function lookupWordMetadataById(wordId: string): WordMetadata | undefined {
+  return wordDataset.find((w) => w.word_id === wordId)
+}
+
+/** Prepend a shared / gifted clip so the feed can play it even before the deck is activated. */
+export function mergeDeepLinkIntoFeed(
+  feed: WordMetadata[],
+  deepWordId: string | null | undefined,
+): WordMetadata[] {
+  if (!deepWordId?.trim()) return feed
+  const id = deepWordId.trim()
+  if (feed.some((w) => w.word_id === id)) return feed
+  const meta = lookupWordMetadataById(id)
+  if (!meta) return feed
+  return [meta, ...feed]
+}
 import { DECK_CATALOG } from '../data/deckCatalog'
 import type { DeckInfo } from './deckService'
 import type { WordMetadata } from './types'
