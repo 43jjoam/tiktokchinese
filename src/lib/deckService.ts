@@ -8,6 +8,8 @@ const SUPABASE_URL =
   rawUrl && rawUrl.length > 0 ? rawUrl.replace(/\/+$/, '') : undefined
 const SUPABASE_ANON_KEY = rawKey && rawKey.length > 0 ? rawKey : undefined
 const LOCAL_KEY = 'tiktokchinese_activated_decks'
+/** Same string as `deckWords` — Library / Home refresh when merged from cloud profile. */
+const ACTIVATED_DECKS_CHANGED_EVENT = 'tiktokchinese:activated-decks-changed'
 
 /** Edge Function `redeem-activation` (service role); falls back to direct PostgREST if missing or errors. */
 const REDEEM_EDGE_TIMEOUT_MS = 22_000
@@ -75,6 +77,32 @@ function getLocalDecks(): DeckInfo[] {
 
 function saveLocalDecks(decks: DeckInfo[]) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(decks))
+}
+
+/** Read Library “My Decks” from localStorage (sync) — used when building cloud profile upload payload. */
+export function readLocalActivatedDecks(): DeckInfo[] {
+  return getLocalDecks()
+}
+
+/**
+ * Merge remote deck rows into local activation list (e.g. after magic-link sign-in on a new device).
+ * Activation_codes in Supabase are keyed by device id; syncing deck rows via `user_learning_profiles` is what
+ * makes HSK 1 (and other purchases) follow the same auth user across browsers / phones.
+ */
+export function mergeActivatedDecksFromCloud(remote: DeckInfo[]): void {
+  if (!remote.length) return
+  const local = getLocalDecks()
+  const byId = new Map<string, DeckInfo>()
+  for (const d of local) byId.set(d.id, d)
+  for (const d of remote) {
+    if (d?.id) byId.set(d.id, d)
+  }
+  saveLocalDecks([...byId.values()])
+  try {
+    window.dispatchEvent(new Event(ACTIVATED_DECKS_CHANGED_EVENT))
+  } catch {
+    /* ignore */
+  }
 }
 
 function persistActivatedDeckIfNeeded(deck: DeckInfo): void {

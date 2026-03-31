@@ -1,9 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  countWordsWithSessions,
   getAuthEmail,
-  pullLearningProfileFromCloudForCurrentUser,
   PERSISTED_STATE_REPLACED_EVENT,
   setLastUsedAccountEmail,
   setProfileUploadDoneUserId,
@@ -27,7 +25,7 @@ import { youtubePosterUrlForWord } from '../lib/wordVideoThumb'
 import { CubeVaultGrid } from './CubeVaultGrid'
 import { EngagementWordPlayer } from './EngagementWordPlayer'
 import { GrammarColorsMontessoriPage } from './GrammarColorsMontessoriPage'
-import { getProfileDisplayName } from '../lib/profileDisplayName'
+import { getProfileDisplayName, getProfileLabelFromAuthEmail } from '../lib/profileDisplayName'
 
 type Category = 'mastered' | 'inProgress' | 'new'
 type ContentKind = 'character' | 'vocabulary' | 'grammar'
@@ -405,7 +403,6 @@ function ProfileThumbFill({ word, className }: { word: WordMetadata; className?:
 }
 
 export default function ProfileTab() {
-  const [displayName, setDisplayName] = useState(() => getProfileDisplayName())
   const [engageTab, setEngageTab] = useState<EngageTab>('shared')
   const [statsSheetOpen, setStatsSheetOpen] = useState(false)
   const [montessoriGrammarOpen, setMontessoriGrammarOpen] = useState(false)
@@ -454,10 +451,6 @@ export default function ProfileTab() {
   }, [])
 
   useEffect(() => {
-    setDisplayName(getProfileDisplayName())
-  }, [storageRev])
-
-  useEffect(() => {
     const client = getSupabaseClient()
     if (!client) {
       setAuthEmail(null)
@@ -479,6 +472,13 @@ export default function ProfileTab() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  /** Signed-in: show email local part (before @); otherwise stored / Learner-xxxx. */
+  const profileDisplayLabel = useMemo(() => {
+    const fromEmail = getProfileLabelFromAuthEmail(authEmail)
+    if (fromEmail) return fromEmail
+    return getProfileDisplayName()
+  }, [authEmail, storageRev])
 
   const persisted = useMemo(() => loadPersistedState(), [storageRev, engagementRev])
   const ws = persisted.wordStates
@@ -522,24 +522,6 @@ export default function ProfileTab() {
     () => resolveWordsByIds(getLocalReceivedWordIds(), feedWordList),
     [feedWordList, engagementRev],
   )
-
-  const profileVisuallyEmpty = useMemo(() => {
-    if (countWordsWithSessions(ws) > 0) return false
-    if (persisted.meta.first20Seen > 0) return false
-    if (
-      savedWords.length + likedWords.length + sharedWords.length + receivedWords.length >
-      0
-    )
-      return false
-    return true
-  }, [
-    ws,
-    persisted.meta.first20Seen,
-    savedWords.length,
-    likedWords.length,
-    sharedWords.length,
-    receivedWords.length,
-  ])
 
   const currentEngageWords = useMemo(() => {
     switch (engageTab) {
@@ -617,25 +599,6 @@ export default function ProfileTab() {
     }
   }, [])
 
-  const onRestoreFromCloud = useCallback(async () => {
-    setRestoreHint(null)
-    setRestoreBusy(true)
-    try {
-      const r = await pullLearningProfileFromCloudForCurrentUser()
-      if (!r.ok) {
-        setRestoreHint(userFacingProfileUploadError(r.error))
-        return
-      }
-      setRestoreHint(
-        r.merged ? 'Restored progress from your account.' : 'Already matches the cloud on this device.',
-      )
-      setStorageRev((x) => x + 1)
-      setEngagementRev((x) => x + 1)
-    } finally {
-      setRestoreBusy(false)
-    }
-  }, [])
-
   const supabaseConfigured = Boolean(getSupabaseClient())
 
   return (
@@ -653,14 +616,14 @@ export default function ProfileTab() {
           className={`flex w-full flex-row items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left transition-colors active:bg-white/[0.07] ${
             !authChecked && supabaseConfigured ? 'mt-3' : !supabaseConfigured ? 'mt-3' : ''
           }`}
-          aria-label="Open learning progress — mastery stats, cubes by deck, and word types"
+          aria-label="Open learning progress"
         >
           <div className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-bold shadow-lg ring-2 ring-white/10">
-            {displayName.charAt(0).toUpperCase()}
+            {profileDisplayLabel.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold text-white">{displayName}</h1>
-            <p className="mt-0.5 text-sm text-white/45">Learning progress · cubes and word types</p>
+            <h1 className="truncate text-lg font-bold text-white">{profileDisplayLabel}</h1>
+            <p className="mt-0.5 text-sm text-white/45">Learning progress</p>
           </div>
           <svg
             viewBox="0 0 24 24"
@@ -712,50 +675,6 @@ export default function ProfileTab() {
               >
                 {syncHint}
               </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {authChecked && supabaseConfigured && profileVisuallyEmpty ? (
-          <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-3">
-            <p className="text-sm leading-relaxed text-white/75">
-              {authEmail ? (
-                <>
-                  This device doesn&apos;t show any study progress yet. If you already learned on another device, tap{' '}
-                  <span className="font-semibold text-white">Restore from cloud</span> — or keep studying in Home and
-                  your stats will fill in here.
-                </>
-              ) : (
-                <>
-                  Progress and saved clips appear here after you use the Home tab. When the feed asks you to save your
-                  progress, sign in so everything stays in sync across devices.
-                </>
-              )}
-            </p>
-            {authEmail ? (
-              <div className="mt-3 flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={restoreBusy}
-                  onClick={() => void onRestoreFromCloud()}
-                  className="rounded-lg bg-indigo-500/35 px-3 py-2 text-xs font-semibold text-indigo-100 ring-1 ring-indigo-400/30 transition-colors active:bg-indigo-500/45 disabled:opacity-50"
-                >
-                  {restoreBusy ? 'Checking cloud…' : 'Restore from cloud'}
-                </button>
-                {restoreHint ? (
-                  <p
-                    className={`text-xs leading-snug ${
-                      restoreHint.startsWith('Restored')
-                        ? 'text-emerald-300/90'
-                        : restoreHint.startsWith('Already')
-                          ? 'text-white/55'
-                          : 'text-amber-200/90'
-                    }`}
-                  >
-                    {restoreHint}
-                  </p>
-                ) : null}
-              </div>
             ) : null}
           </div>
         ) : null}
@@ -840,10 +759,33 @@ export default function ProfileTab() {
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+                {authChecked && supabaseConfigured ? (
+                  authEmail ? (
+                    <div className="mb-4 mt-1 rounded-2xl border border-emerald-500/35 bg-emerald-950/45 px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-200/85">
+                        Sync your progress
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-white/78">
+                        Your learning saves to this account while you&apos;re signed in. Open the app on another device
+                        with the same email and your stats and Library will merge automatically. If something looks out
+                        of date, tap <span className="font-semibold text-white">Sync now</span> on the Profile screen
+                        above.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mb-4 mt-1 rounded-2xl border border-white/12 bg-white/[0.05] px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Cloud backup</p>
+                      <p className="mt-2 text-sm leading-relaxed text-white/72">
+                        Sign in from the Home tab to sync progress across devices and keep your Library in step.
+                      </p>
+                    </div>
+                  )
+                ) : null}
+
                 <button
                   type="button"
                   onClick={() => setMontessoriGrammarOpen(true)}
-                  className="mb-6 mt-1 flex w-full items-center gap-3 rounded-2xl border border-violet-500/35 bg-violet-500/10 px-4 py-3 text-left transition-colors active:bg-violet-500/20"
+                  className="mb-6 flex w-full items-center gap-3 rounded-2xl border border-violet-500/35 bg-violet-500/10 px-4 py-3 text-left transition-colors active:bg-violet-500/20"
                   aria-label="Word types in Chinese. Opens list and tiles."
                 >
                   <div

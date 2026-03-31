@@ -1,6 +1,14 @@
 const KEY = 'tiktokchinese_display_name'
 const MAX_LEN = 48
 
+/** When signed in, prefer the email local part (before @) for display and uploads. */
+export function getProfileLabelFromAuthEmail(email: string | null | undefined): string | null {
+  const m = email?.trim()
+  if (!m?.includes('@')) return null
+  const local = m.split('@')[0]?.trim()
+  return local ? local.slice(0, MAX_LEN) : null
+}
+
 /** Readable in UI and bundled into `user_learning_profiles` for cross-device sync. */
 export function getProfileDisplayName(): string {
   try {

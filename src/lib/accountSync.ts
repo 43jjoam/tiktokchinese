@@ -1,9 +1,18 @@
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
 import { isRetryableSupabaseFailure, sleep } from './cloudRetries'
 import { getDeviceHashForEngagement } from './deviceHash'
-import { getSupabaseClient } from './deckService'
+import {
+  getSupabaseClient,
+  mergeActivatedDecksFromCloud,
+  readLocalActivatedDecks,
+  type DeckInfo,
+} from './deckService'
 import { hydrateEngagementLocalListsFromCloud } from './engagementService'
-import { getProfileDisplayName, setProfileDisplayNameFromCloud } from './profileDisplayName'
+import {
+  getProfileDisplayName,
+  getProfileLabelFromAuthEmail,
+  setProfileDisplayNameFromCloud,
+} from './profileDisplayName'
 import {
   generateReferralCodeCandidate,
   isReferralCodeUniqueViolation,
@@ -105,6 +114,11 @@ export type StoredLearningProfilePayload = {
   currentWordId: string | null
   /** Profile header name; synced across devices with the same auth user. */
   displayName?: string
+  /**
+   * Library “My Decks” rows (e.g. HSK 1 after activation). Synced so a new device with the same
+   * auth user still sees purchased decks — activation_codes.redeemed_by alone is device-scoped.
+   */
+  activatedDeckCatalog?: DeckInfo[]
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -117,6 +131,27 @@ function isPersistedState(x: unknown): x is PersistedState {
   return true
 }
 
+function normalizeActivatedDeckCatalog(v: unknown): DeckInfo[] | undefined {
+  if (!Array.isArray(v) || v.length === 0) return undefined
+  const out: DeckInfo[] = []
+  for (const item of v) {
+    if (!isRecord(item)) continue
+    const id = typeof item.id === 'string' ? item.id.trim() : ''
+    if (!id) continue
+    const name = typeof item.name === 'string' ? item.name : ''
+    const cover = typeof item.cover_image_url === 'string' ? item.cover_image_url : ''
+    const shopRaw = item.shopify_url
+    const shopify_url =
+      shopRaw === null || shopRaw === undefined
+        ? null
+        : typeof shopRaw === 'string'
+          ? shopRaw
+          : null
+    out.push({ id, name, cover_image_url: cover, shopify_url })
+  }
+  return out.length ? out : undefined
+}
+
 function normalizeProfilePayload(raw: unknown): StoredLearningProfilePayload | null {
   if (!isRecord(raw)) return null
   if (raw.v === PROFILE_V && isPersistedState(raw.persisted)) {
@@ -127,6 +162,7 @@ function normalizeProfilePayload(raw: unknown): StoredLearningProfilePayload | n
       currentWordId: typeof raw.currentWordId === 'string' ? raw.currentWordId : null,
       displayName:
         typeof dn === 'string' && dn.trim().length > 0 ? dn.trim().slice(0, 48) : undefined,
+      activatedDeckCatalog: normalizeActivatedDeckCatalog(raw.activatedDeckCatalog),
     }
   }
   /* Legacy: entire blob was PersistedState */
@@ -152,12 +188,18 @@ export function localLearningProgressNeedsUploadFirst(): boolean {
   return false
 }
 
-function buildUploadPayload(): StoredLearningProfilePayload {
+function displayNameForProfileUpload(sessionEmail: string | null | undefined): string {
+  return getProfileLabelFromAuthEmail(sessionEmail) ?? getProfileDisplayName()
+}
+
+function buildUploadPayload(sessionEmail?: string | null): StoredLearningProfilePayload {
+  const decks = readLocalActivatedDecks()
   return {
     v: PROFILE_V,
     persisted: loadPersistedState(),
     currentWordId: loadCurrentWordId(),
-    displayName: getProfileDisplayName(),
+    displayName: displayNameForProfileUpload(sessionEmail),
+    ...(decks.length > 0 ? { activatedDeckCatalog: decks } : {}),
   }
 }
 
@@ -176,6 +218,9 @@ function applyProfilePayload(p: StoredLearningProfilePayload): void {
   }
   if (p.displayName?.trim()) {
     setProfileDisplayNameFromCloud(p.displayName.trim())
+  }
+  if (p.activatedDeckCatalog?.length) {
+    mergeActivatedDecksFromCloud(p.activatedDeckCatalog)
   }
   notifyPersistedStateReplaced()
 }
@@ -353,7 +398,7 @@ export async function uploadLearningProfileFromLocal(): Promise<
     let codeTries = 0
     while (codeTries < 8) {
       codeTries++
-      const body = buildUploadPayload()
+      const body = buildUploadPayload(session.user.email)
       const statsCols = profileStatsColumnsForUpsert(loadPersistedState().meta)
       const referralCols = profileReferralColumnsForUpsert(loadPersistedState().meta)
       const { data, error } = await supabase
@@ -583,7 +628,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
   const prevCloudUid = local.meta.lastCloudProfileUserId
 
   if (prevCloudUid && prevCloudUid !== userId) {
-    const remote = await fetchRemoteLearningProfile()
+    const remote = await fetchRemoteLearningProfileWithRetries()
     if (remote) {
       applyProfilePayload(remote.payload)
       applyRemoteProfileDbColumnsToLocal(remote.stats, remote.referral)
@@ -649,7 +694,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
 
   const hasLocalStudy = localLearningProgressNeedsUploadFirst()
   let uploadDone = getProfileUploadDoneUserId() === userId
-  let remoteProfile = await fetchRemoteLearningProfile()
+  let remoteProfile = await fetchRemoteLearningProfileWithRetries()
 
   if (uploadDone && !remoteProfile && hasLocalStudy) {
     clearProfileUploadDoneUserId()
@@ -734,6 +779,21 @@ export async function fetchRemoteLearningProfile(): Promise<
   return null
 }
 
+/**
+ * After magic link / new tab, the first `user_learning_profiles` read can race the session.
+ * Retrying avoids treating remote as “missing” and upserting an empty payload over real progress.
+ */
+async function fetchRemoteLearningProfileWithRetries(maxAttempts = 8): Promise<
+  Awaited<ReturnType<typeof fetchRemoteLearningProfile>>
+> {
+  for (let i = 0; i < maxAttempts; i++) {
+    const r = await fetchRemoteLearningProfile()
+    if (r) return r
+    if (i < maxAttempts - 1) await sleep(350 + i * 250)
+  }
+  return null
+}
+
 function remoteIsNotNewerThanCursor(remoteUpdatedAt: string, localCursor: string): boolean {
   const r = Date.parse(remoteUpdatedAt)
   const l = Date.parse(localCursor)
@@ -746,7 +806,7 @@ function remoteIsNotNewerThanCursor(remoteUpdatedAt: string, localCursor: string
  */
 export async function mergeRemoteProfileIfNewer(expectedUserId: string): Promise<boolean> {
   const local = loadPersistedState()
-  const remote = await fetchRemoteLearningProfile()
+  const remote = await fetchRemoteLearningProfileWithRetries()
   if (!remote) return false
 
   const prev = local.meta.lastMergedRemoteUpdatedAt ?? ''
