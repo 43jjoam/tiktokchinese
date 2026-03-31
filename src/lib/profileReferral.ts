@@ -34,16 +34,15 @@ export function remoteReferralFromDbRow(row: ReferralRow | null | undefined): Re
 }
 
 /**
- * Columns for PostgREST `upsert`. Omit `referral_count` — server-owned (Step 8). Omit `referred_by` when
- * unset so we do not clear an attributed referrer on update.
+ * Columns for PostgREST `upsert`. Omit `referral_count` — server-owned (Step 8).
+ * Omit `referral_code` / `referred_by` when unset so we never send NULL and wipe existing DB values on update.
  */
 export function profileReferralColumnsForUpsert(meta: AppMeta): ReferralRow {
   const c = meta.referralCode?.trim()
   const ref =
     meta.referredByUserId && UUID_RE.test(meta.referredByUserId) ? meta.referredByUserId : null
-  const out: ReferralRow = {
-    referral_code: c ? c.toUpperCase() : null,
-  }
+  const out: ReferralRow = {}
+  if (c) out.referral_code = c.toUpperCase()
   if (ref) out.referred_by = ref
   return out
 }

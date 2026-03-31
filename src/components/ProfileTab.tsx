@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  CLOUD_PROFILE_SAVED_EVENT,
   getAuthEmail,
+  getProfileUploadDoneUserId,
   PERSISTED_STATE_REPLACED_EVENT,
   setLastUsedAccountEmail,
-  setProfileUploadDoneUserId,
-  uploadLearningProfileWithLocalMeta,
-  userFacingProfileUploadError,
 } from '../lib/accountSync'
 import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState, type AppMeta } from '../lib/storage'
@@ -417,10 +416,10 @@ export default function ProfileTab() {
   const [engagementRev, setEngagementRev] = useState(0)
   const [storageRev, setStorageRev] = useState(0)
   const [authEmail, setAuthEmail] = useState<string | null>(null)
+  const [authUserId, setAuthUserId] = useState<string | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
-  const [syncHint, setSyncHint] = useState<string | null>(null)
-  const [restoreBusy, setRestoreBusy] = useState(false)
-  const [restoreHint, setRestoreHint] = useState<string | null>(null)
+  /** Re-render account badge after `setProfileUploadDoneUserId` (e.g. feed upload). */
+  const [cloudBadgeRev, setCloudBadgeRev] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -454,6 +453,7 @@ export default function ProfileTab() {
     const client = getSupabaseClient()
     if (!client) {
       setAuthEmail(null)
+      setAuthUserId(null)
       setAuthChecked(true)
       return
     }
@@ -461,16 +461,26 @@ export default function ProfileTab() {
       setAuthEmail(email)
       setAuthChecked(true)
     })
+    void client.auth.getSession().then(({ data: { session } }) => {
+      setAuthUserId(session?.user?.id ?? null)
+    })
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, session) => {
       const em = session?.user?.email ?? null
       setAuthEmail(em)
+      setAuthUserId(session?.user?.id ?? null)
       if (em) {
         setLastUsedAccountEmail(em)
       }
     })
     return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const bump = () => setCloudBadgeRev((n) => n + 1)
+    window.addEventListener(CLOUD_PROFILE_SAVED_EVENT, bump)
+    return () => window.removeEventListener(CLOUD_PROFILE_SAVED_EVENT, bump)
   }, [])
 
   /** Signed-in: show email local part (before @); otherwise stored / Learner-xxxx. */
@@ -581,25 +591,12 @@ export default function ProfileTab() {
     [engageTab],
   )
 
-  const onSyncNow = useCallback(async () => {
-    setSyncHint(null)
-    const client = getSupabaseClient()
-    const r = await uploadLearningProfileWithLocalMeta()
-    if (r.ok) {
-      setSyncHint('Saved to your account.')
-      if (client) {
-        const {
-          data: { session },
-        } = await client.auth.getSession()
-        if (session?.user?.id) setProfileUploadDoneUserId(session.user.id)
-      }
-      setStorageRev((x) => x + 1)
-    } else {
-      setSyncHint(userFacingProfileUploadError(r.error))
-    }
-  }, [])
-
   const supabaseConfigured = Boolean(getSupabaseClient())
+
+  const accountCloudStatusLabel = useMemo(() => {
+    if (!authUserId || !supabaseConfigured) return null
+    return getProfileUploadDoneUserId() === authUserId ? 'Synced' : 'Up to date'
+  }, [authUserId, supabaseConfigured, cloudBadgeRev])
 
   return (
     <div className="relative z-10 mx-auto flex h-dvh w-full flex-col overflow-hidden bg-black md:w-[min(100vw,calc(100dvh*9/16))]">
@@ -641,41 +638,19 @@ export default function ProfileTab() {
 
         <ProfileStatsStrip meta={persisted.meta} />
 
-        {authChecked && authEmail && persisted.meta.referralCode ? (
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-white/40">Invite code</span>
-            <span className="font-mono text-sm font-semibold tracking-wider text-white" title="Share in a later update">
-              {persisted.meta.referralCode}
-            </span>
-          </div>
-        ) : null}
-
         {authChecked && authEmail ? (
           <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-            <div className="flex items-start justify-between gap-3">
-              <p className="min-w-0 flex-1 text-xs leading-snug text-white/55">
-                <span className="font-medium uppercase tracking-wide text-white/40">Account</span>
-                <span className="mt-0.5 block truncate text-sm text-white/85" title={authEmail}>
-                  {authEmail}
+            <span className="text-[11px] font-medium uppercase tracking-wide text-white/40">Account</span>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-sm text-white/85" title={authEmail}>
+                {authEmail}
+              </span>
+              {accountCloudStatusLabel ? (
+                <span className="shrink-0 text-[11px] font-medium text-emerald-200/90">
+                  {accountCloudStatusLabel}
                 </span>
-              </p>
-              <button
-                type="button"
-                onClick={() => void onSyncNow()}
-                className="shrink-0 rounded-lg bg-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-white active:bg-white/25"
-              >
-                Sync now
-              </button>
+              ) : null}
             </div>
-            {syncHint ? (
-              <p
-                className={`mt-2 text-xs ${
-                  syncHint.startsWith('Saved to') ? 'text-emerald-300/95' : 'text-amber-200/90'
-                }`}
-              >
-                {syncHint}
-              </p>
-            ) : null}
           </div>
         ) : null}
 
@@ -767,9 +742,7 @@ export default function ProfileTab() {
                       </p>
                       <p className="mt-2 text-sm leading-relaxed text-white/78">
                         Your learning saves to this account while you&apos;re signed in. Open the app on another device
-                        with the same email and your stats and Library will merge automatically. If something looks out
-                        of date, tap <span className="font-semibold text-white">Sync now</span> on the Profile screen
-                        above.
+                        with the same email and your stats and Library will merge automatically.
                       </p>
                     </div>
                   ) : (

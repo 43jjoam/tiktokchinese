@@ -1,3 +1,4 @@
+import { applyPendingReferralAttribution } from './referralLanding'
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
 import { isRetryableSupabaseFailure, sleep } from './cloudRetries'
 import { getDeviceHashForEngagement } from './deviceHash'
@@ -228,6 +229,11 @@ function applyProfilePayload(p: StoredLearningProfilePayload): void {
 /** DB columns win over JSON `meta` for stats + referral (see `user_learning_profiles` migrations). */
 function applyRemoteProfileDbColumnsToLocal(stats: RemoteProfileStats, referral: RemoteReferralFields): void {
   const prev = loadPersistedState()
+  const remoteCode = referral.referralCode?.trim()
+  const localCode = prev.meta.referralCode?.trim()
+  /** Server null must not wipe a locally generated code before it has been upserted. */
+  const mergedReferralCode = remoteCode || localCode || null
+  const mergedReferredBy = referral.referredByUserId ?? prev.meta.referredByUserId ?? null
   savePersistedState({
     ...prev,
     meta: {
@@ -236,8 +242,8 @@ function applyRemoteProfileDbColumnsToLocal(stats: RemoteProfileStats, referral:
       currentStreak: stats.currentStreak,
       totalDaysActive: stats.totalDaysActive,
       bonusCardsUnlocked: stats.bonusCardsUnlocked,
-      referralCode: referral.referralCode,
-      referredByUserId: referral.referredByUserId,
+      referralCode: mergedReferralCode ? mergedReferralCode.toUpperCase() : null,
+      referredByUserId: mergedReferredBy,
       referralCount: referral.referralCount,
     },
   })
@@ -292,13 +298,13 @@ function userFacingOtpEmailError(raw: string): string {
 export function userFacingProfileUploadError(raw: string): string {
   const m = raw.toLowerCase()
   if (raw === 'no_client') return 'Cloud backup is not available in this build.'
-  if (raw === 'no_session') return 'You are not signed in. Sign in again, then tap Sync now.'
-  if (raw === 'no_timestamp') return 'Cloud saved but the server response was incomplete. Tap Sync now once more.'
+  if (raw === 'no_session') return 'You are not signed in. Sign in again, then try saving your progress.'
+  if (raw === 'no_timestamp') return 'Cloud saved but the server response was incomplete. Please try again.'
   if (isRetryableSupabaseFailure(raw) || m.includes('fetch')) {
-    return 'Network issue — check your connection and tap Sync now again.'
+    return 'Network issue — check your connection and try again.'
   }
   if (m.includes('jwt') || m.includes('expired') || m.includes('invalid token')) {
-    return 'Session expired — sign out and sign in again, then tap Sync now.'
+    return 'Session expired — sign out and sign in again.'
   }
   if (m.includes('row-level') || m.includes('rls') || m.includes('policy') || m.includes('permission')) {
     return 'Could not save (permissions). Try signing out and back in.'
@@ -581,12 +587,48 @@ export async function restoreCloudDataToLocalAfterSignIn(userId: string): Promis
   }
 }
 
+/**
+ * If the server row still has no `referral_code` but local does (after merge preservation), upsert once.
+ * Safe to call after sign-in / restore; no-ops when cloud already matches local.
+ */
+export async function ensureReferralCodePersistedToCloud(userId: string): Promise<void> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return
+  ensureReferralCodeBeforeUpload()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.user?.id || session.user.id !== userId) return
+
+  const remote = await fetchRemoteLearningProfileWithRetries()
+  const local = loadPersistedState()
+  const code = local.meta.referralCode?.trim()
+  if (!code) return
+
+  const remoteCode = remote?.referral.referralCode?.trim()
+  if (remoteCode && remoteCode.toUpperCase() === code.toUpperCase()) return
+
+  const up = await uploadLearningProfileWithLocalMeta()
+  if (!up.ok) {
+    console.warn('[referral] ensureReferralCodePersistedToCloud failed:', up.error)
+  }
+}
+
 async function finalizeCloudProfileSync(
   userId: string,
   hadLocalStudyProgressAtStart: boolean,
   partial: Pick<SyncCloudProfileAfterAuthResult, 'uploaded' | 'merged' | 'uploadError'>,
 ): Promise<SyncCloudProfileAfterAuthResult> {
   await restoreCloudDataToLocalAfterSignIn(userId)
+  await ensureReferralCodePersistedToCloud(userId)
+
+  const referralAttributed = await applyPendingReferralAttribution(userId)
+  if (referralAttributed) {
+    const refUp = await uploadLearningProfileWithLocalMeta()
+    if (!refUp.ok) {
+      console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
+    }
+  }
 
   let remoteRow = await fetchRemoteLearningProfile()
   if (partial.uploaded && !remoteRow) {

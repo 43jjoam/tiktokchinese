@@ -70,6 +70,7 @@ import {
   uploadLearningProfileWithLocalMeta,
   userFacingProfileUploadError,
 } from '../lib/accountSync'
+import { applyPendingReferralAttribution, captureReferralFromUrl } from '../lib/referralLanding'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
 import {
   CONVERSION_UNIQUE_CC1_THRESHOLD,
@@ -834,6 +835,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     void prefetchYouTubeIframeApi()
   }, [])
 
+  useEffect(() => {
+    captureReferralFromUrl()
+  }, [])
+
   const prefetchBootPath = useMemo(() => {
     const id = loadCurrentWordId()
     const w = id ? words.find((x) => x.word_id === id) : undefined
@@ -914,6 +919,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const runAuthCloudSync = useCallback(async (session: Session) => {
     const user = session.user
     if (!user?.id) return
+    captureReferralFromUrl()
     stripSupabaseOAuthParamsFromUrl()
     if (user.email) setLastUsedAccountEmail(user.email)
     setCloudBackupHint(null)
@@ -945,9 +951,19 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       }
     } catch (err) {
       console.error('[sync] profile sync FAILED:', err)
-      setCloudBackupHint('Cloud sync hit an error. Try Profile → Sync now.')
+      setCloudBackupHint('Cloud sync hit an error. Try again in a moment.')
     }
   }, [])
+
+  useEffect(() => {
+    if (!signedInUserId) return
+    void (async () => {
+      const attributed = await applyPendingReferralAttribution(signedInUserId)
+      if (!attributed) return
+      const up = await uploadLearningProfileWithLocalMeta()
+      if (up.ok) setProfileUploadDoneUserId(signedInUserId)
+    })()
+  }, [signedInUserId])
 
   useEffect(() => {
     const client = getSupabaseClient()
