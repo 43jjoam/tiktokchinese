@@ -945,6 +945,7 @@ export default function ProfileTab() {
             onBack={() => {
               setListFocusWord(null)
               setActiveList(null)
+              setStatsSheetOpen(true)
             }}
             onPickWord={(w) => setListFocusWord(w)}
           />

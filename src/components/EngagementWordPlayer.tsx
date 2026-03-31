@@ -695,11 +695,18 @@ export function EngagementWordPlayer({
       <motion.div
         layoutId={thumbSharedLayoutId}
         transition={thumbSharedLayoutId ? sharedThumbLayoutTransition : undefined}
-        className="absolute inset-0 z-[1] overflow-hidden bg-black"
+        className="absolute inset-0 z-[1] overflow-hidden bg-black md:flex md:items-center md:justify-center"
         style={{ pointerEvents: 'none', backgroundColor: '#000' }}
       >
+        {/*
+          Match Home feed: full-bleed cover on phones; on md+ letterbox so portrait Shorts are not over-cropped
+          on desktop (Library deck vault, Profile word lists, grammar vault).
+        */}
         {ytId ? (
-          <div key={activeWord.word_id} className="relative z-[2] h-full min-h-0 w-full bg-black">
+          <div
+            key={activeWord.word_id}
+            className="relative z-[2] h-full w-full min-h-0 min-w-0 bg-black md:mx-auto md:h-[min(100dvh,calc(100vw*16/9))] md:w-[min(100vw,calc(100dvh*9/16))]"
+          >
             <YouTubeEmbedPlayer videoId={ytId} onPlaying={markPlaybackReady} />
           </div>
         ) : needsSignedNativeUrl ? (
@@ -714,7 +721,7 @@ export function EngagementWordPlayer({
               playsInline
               preload="auto"
               poster={posterUrl ?? undefined}
-              className="relative z-[2] h-full min-h-0 w-full object-cover bg-black"
+              className="relative z-[2] h-full w-full min-h-0 object-cover bg-black md:h-auto md:max-h-[100dvh] md:w-auto md:max-w-[100vw] md:object-contain"
               onLoadedData={markPlaybackReady}
               onLoadedMetadata={markPlaybackReady}
               onCanPlay={markPlaybackReady}
@@ -743,7 +750,7 @@ export function EngagementWordPlayer({
             playsInline
             preload="auto"
             poster={posterUrl ?? undefined}
-            className="relative z-[2] h-full min-h-0 w-full object-cover bg-black"
+            className="relative z-[2] h-full w-full min-h-0 object-cover bg-black md:h-auto md:max-h-[100dvh] md:w-auto md:max-w-[100vw] md:object-contain"
             onLoadedData={markPlaybackReady}
             onLoadedMetadata={markPlaybackReady}
             onCanPlay={markPlaybackReady}
@@ -758,7 +765,7 @@ export function EngagementWordPlayer({
             loading="eager"
             decoding="async"
             fetchPriority="high"
-            className="pointer-events-none absolute inset-0 z-[4] h-full w-full bg-black object-cover"
+            className="pointer-events-none absolute inset-0 z-[4] h-full w-full bg-black object-cover md:object-contain"
           />
         ) : null}
       </motion.div>
