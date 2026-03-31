@@ -255,25 +255,25 @@ function ProfileProgressStatsRow({
     <button
       type="button"
       onClick={onOpenProgress}
-      className="mt-5 w-full rounded-2xl bg-white/[0.04] px-1 py-4 text-left transition-colors active:bg-white/[0.07]"
+      className="mt-4 w-full rounded-2xl bg-white/[0.04] px-1 py-3 text-left transition-colors active:bg-white/[0.07]"
       aria-label="Open learning progress — streak, active days, and mastered"
     >
       <div className="grid grid-cols-3 gap-1">
         <div className="text-center">
-          <div className="text-[22px] font-bold tabular-nums leading-none text-white">{streak}</div>
-          <div className="mt-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+          <div className="text-lg font-semibold tabular-nums leading-none tracking-tight text-white">{streak}</div>
+          <div className="mt-1.5 px-0.5 text-[9px] font-normal uppercase tracking-wide text-white/45">
             {streak === 1 ? 'Day streak' : 'Days streak'}
           </div>
         </div>
         <div className="text-center">
-          <div className="text-[22px] font-bold tabular-nums leading-none text-white">{activeDays}</div>
-          <div className="mt-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+          <div className="text-lg font-semibold tabular-nums leading-none tracking-tight text-white">{activeDays}</div>
+          <div className="mt-1.5 px-0.5 text-[9px] font-normal uppercase tracking-wide text-white/45">
             Active days
           </div>
         </div>
         <div className="text-center">
-          <div className="text-[22px] font-bold tabular-nums leading-none text-white">{charactersMastered}</div>
-          <div className="mt-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+          <div className="text-lg font-semibold tabular-nums leading-none tracking-tight text-white">{charactersMastered}</div>
+          <div className="mt-1.5 px-0.5 text-[9px] font-normal uppercase tracking-wide text-white/45">
             Mastered
           </div>
         </div>
@@ -624,17 +624,17 @@ export default function ProfileTab() {
           }`}
         >
           <div
-            className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-3xl font-bold text-white shadow-lg ring-2 ring-white/10"
+            className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-semibold text-white shadow-lg ring-2 ring-white/10"
             aria-hidden
           >
             {profileDisplayLabel.charAt(0).toUpperCase()}
           </div>
-          <h1 className="mt-3 max-w-full truncate px-1 text-center text-xl font-bold text-white">
+          <h1 className="mt-2.5 max-w-full truncate px-1 text-center text-base font-semibold tracking-tight text-white">
             {profileDisplayLabel}
           </h1>
           {authChecked && authEmail ? (
-            <div className="mt-2 flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1">
-              <span className="text-center text-sm text-white/55" title={authEmail}>
+            <div className="mt-1.5 flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1">
+              <span className="text-center text-xs text-white/55" title={authEmail}>
                 {authEmail}
               </span>
               {accountCloudStatusLabel ? (
