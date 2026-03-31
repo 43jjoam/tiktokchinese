@@ -85,7 +85,7 @@ export default function LibraryTab() {
   }, [code])
 
   return (
-    <div className="relative z-10 h-dvh overflow-y-auto bg-black pb-20 pt-4 px-5">
+    <div className="relative z-10 mx-auto h-dvh w-full max-w-lg overflow-y-auto bg-black px-5 pb-20 pt-4 md:max-w-xl">
       <AnimatePresence>
         {openDeck && (
           <DeckContentsPanel

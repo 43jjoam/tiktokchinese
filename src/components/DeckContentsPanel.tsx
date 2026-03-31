@@ -51,55 +51,57 @@ export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'tween', duration: 0.25 }}
-        className="fixed inset-0 z-[100] flex h-dvh flex-col bg-black"
+        className="fixed inset-0 z-[100] flex h-dvh flex-col bg-black md:items-center"
       >
-        <div className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-white/10 bg-black/90 px-5 py-3 backdrop-blur-xl">
-          <button
-            type="button"
-            onClick={onBack}
-            className="flex items-center gap-1.5 text-sm text-white/60 transition-colors active:text-white"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <div className="flex h-full w-full max-w-lg flex-col md:max-w-xl">
+          <div className="sticky top-0 z-20 flex shrink-0 items-center gap-3 border-b border-white/10 bg-black/90 px-5 py-3 backdrop-blur-xl">
+            <button
+              type="button"
+              onClick={onBack}
+              className="flex items-center gap-1.5 text-sm text-white/60 transition-colors active:text-white"
             >
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Back
-          </button>
-          <h2 className="min-w-0 flex-1 truncate text-base font-bold text-white">{deck.name}</h2>
-        </div>
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Back
+            </button>
+            <h2 className="min-w-0 flex-1 truncate text-base font-bold text-white">{deck.name}</h2>
+          </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-4">
-          <p className="mb-4 text-[11px] leading-relaxed text-white/45">
-            Cubes use part-of-speech colors (solid), ghost for new, gold for mastered — same as Profile. Tap
-            solid or gold to review; ghost unlocks after you earn progress in Home.
-          </p>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-4">
+            <p className="mb-4 text-[11px] leading-relaxed text-white/45">
+              Cubes use part-of-speech colors (solid), ghost for new, gold for mastered — same as Profile. Tap
+              solid or gold to review; ghost unlocks after you earn progress in Home.
+            </p>
 
-          {words.length === 0 ? (
-            <p className="mt-8 text-sm text-white/40">No items in this deck yet.</p>
-          ) : (
-            <div className="space-y-8" aria-label={`${deck.name} deck cubes`}>
-              {sections.map((sec) => (
-                <section key={sec.title}>
-                  <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-white/40">
-                    {sec.title}
-                  </h3>
-                  <CubeVaultGrid
-                    words={sec.words}
-                    wordStates={wordStates as Record<string, WordState | undefined>}
-                    onPickWord={(w) => setFocusWord(w)}
-                  />
-                </section>
-              ))}
-            </div>
-          )}
+            {words.length === 0 ? (
+              <p className="mt-8 text-sm text-white/40">No items in this deck yet.</p>
+            ) : (
+              <div className="space-y-8" aria-label={`${deck.name} deck cubes`}>
+                {sections.map((sec) => (
+                  <section key={sec.title}>
+                    <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-white/40">
+                      {sec.title}
+                    </h3>
+                    <CubeVaultGrid
+                      words={sec.words}
+                      wordStates={wordStates as Record<string, WordState | undefined>}
+                      onPickWord={(w) => setFocusWord(w)}
+                    />
+                  </section>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
 
