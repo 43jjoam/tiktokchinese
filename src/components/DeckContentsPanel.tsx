@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { PERSISTED_STATE_REPLACED_EVENT } from '../lib/accountSync'
 import { bandDeckWordsByCubeTier } from '../lib/cubeVaultSort'
 import { getWordsForDeck } from '../lib/deckWords'
+import { prefetchLessonVideoSignedUrls } from '../lib/storageVideoUrl'
 import { loadPersistedState } from '../lib/storage'
 import type { DeckInfo } from '../lib/deckService'
 import type { WordMetadata, WordState } from '../lib/types'
@@ -25,6 +26,11 @@ export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
     window.addEventListener(PERSISTED_STATE_REPLACED_EVENT, bump)
     return () => window.removeEventListener(PERSISTED_STATE_REPLACED_EVENT, bump)
   }, [])
+
+  /** Warm Supabase signed-URL cache so HSK1 / storage-backed clips start faster when a cube is opened. */
+  useEffect(() => {
+    prefetchLessonVideoSignedUrls(getWordsForDeck(deck))
+  }, [deck])
 
   const { wordStates } = useMemo(() => loadPersistedState(), [storageRev])
   const words = useMemo(() => getWordsForDeck(deck), [deck])

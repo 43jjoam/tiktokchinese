@@ -160,6 +160,9 @@ export function EngagementWordPlayer({
   const wordRef = useRef(activeWord)
   wordRef.current = activeWord
 
+  /** Native `<video>` only (not YouTube). Used to `play()` after mount — Library/Profile open after tap can miss `autoPlay`. */
+  const feedVideoRef = useRef<HTMLVideoElement | null>(null)
+
   const [engageVideoReady, setEngageVideoReady] = useState(false)
   const [shareSheetOpen, setShareSheetOpen] = useState(false)
 
@@ -607,6 +610,40 @@ export function EngagementWordPlayer({
     setEngageVideoReady(true)
   }, [])
 
+  /**
+   * Same idea as VideoFeed: some desktop browsers omit loadeddata/canplay; still unstick poster overlay.
+   */
+  useEffect(() => {
+    if (missingVideo) return
+    const t = window.setTimeout(() => markPlaybackReady(), 10_000)
+    return () => window.clearTimeout(t)
+  }, [activeWord.word_id, missingVideo, markPlaybackReady])
+
+  /**
+   * Opening from Library cube tap finishes before this `<video>` mounts — `autoPlay` alone can fail.
+   * Retry `play()` on next frame(s) after src is set (muted = usually allowed).
+   */
+  useEffect(() => {
+    if (ytId) return
+    if (missingVideo) return
+    let cancelled = false
+    let id2: number | null = null
+    const run = () => {
+      if (cancelled) return
+      const v = feedVideoRef.current
+      if (v) void v.play().catch(() => {})
+    }
+    const id1 = window.requestAnimationFrame(() => {
+      run()
+      id2 = window.requestAnimationFrame(run)
+    })
+    return () => {
+      cancelled = true
+      window.cancelAnimationFrame(id1)
+      if (id2 != null) window.cancelAnimationFrame(id2)
+    }
+  }, [activeWord.word_id, activeWord.video_url, ytId, missingVideo, nativePlaybackSrc, needsSignedNativeUrl])
+
   /** Show actions + character as soon as we have a still (poster) or playable video. */
   const chromeReady = missingVideo || engageVideoReady || Boolean(posterUrl)
 
@@ -655,6 +692,7 @@ export function EngagementWordPlayer({
         ) : needsSignedNativeUrl ? (
           nativePlaybackSrc ? (
             <video
+              ref={feedVideoRef}
               key={activeWord.word_id}
               src={nativePlaybackSrc}
               autoPlay
@@ -665,7 +703,9 @@ export function EngagementWordPlayer({
               poster={posterUrl ?? undefined}
               className="relative z-[2] h-full min-h-0 w-full object-cover bg-black"
               onLoadedData={markPlaybackReady}
+              onLoadedMetadata={markPlaybackReady}
               onCanPlay={markPlaybackReady}
+              onCanPlayThrough={markPlaybackReady}
               onPlaying={markPlaybackReady}
               onError={() => {
                 const w = wordRef.current
@@ -681,6 +721,7 @@ export function EngagementWordPlayer({
           ) : null
         ) : activeWord.video_url ? (
           <video
+            ref={feedVideoRef}
             key={activeWord.video_url}
             src={activeWord.video_url}
             autoPlay
@@ -691,7 +732,9 @@ export function EngagementWordPlayer({
             poster={posterUrl ?? undefined}
             className="relative z-[2] h-full min-h-0 w-full object-cover bg-black"
             onLoadedData={markPlaybackReady}
+            onLoadedMetadata={markPlaybackReady}
             onCanPlay={markPlaybackReady}
+            onCanPlayThrough={markPlaybackReady}
             onPlaying={markPlaybackReady}
           />
         ) : null}

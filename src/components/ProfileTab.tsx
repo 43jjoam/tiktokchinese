@@ -11,7 +11,7 @@ import {
   userFacingProfileUploadError,
 } from '../lib/accountSync'
 import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
-import { loadPersistedState } from '../lib/storage'
+import { loadPersistedState, type AppMeta } from '../lib/storage'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
 import { getWordContentKind } from '../lib/wordContentKind'
 import { sortWordsByCubeTier } from '../lib/cubeVaultSort'
@@ -239,6 +239,42 @@ function StatCard({
         </>
       )}
     </button>
+  )
+}
+
+function ProfileStatsStrip({ meta }: { meta: AppMeta }) {
+  const streak = meta.currentStreak ?? 0
+  const days = meta.totalDaysActive ?? 0
+  const bonus = meta.bonusCardsUnlocked ?? 0
+  const last = meta.lastActiveDate
+  return (
+    <div
+      className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[11px] text-white/70"
+      aria-label="Activity streak and profile stats"
+    >
+      <span>
+        <span className="mr-0.5" aria-hidden>
+          🔥
+        </span>
+        <span className="font-semibold tabular-nums text-white/90">{streak}</span>
+        <span className="text-white/50"> day streak</span>
+      </span>
+      <span>
+        <span className="font-semibold tabular-nums text-white/90">{days}</span>
+        <span className="text-white/50"> active days</span>
+      </span>
+      {bonus > 0 ? (
+        <span>
+          <span className="font-semibold tabular-nums text-amber-200/95">+{bonus}</span>
+          <span className="text-white/50"> bonus cards</span>
+        </span>
+      ) : null}
+      {last ? (
+        <span className="text-white/40">Last active {last}</span>
+      ) : (
+        <span className="text-white/35">Streak updates when you study (Home feed)</span>
+      )}
+    </div>
   )
 }
 
@@ -639,6 +675,8 @@ export default function ProfileTab() {
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
+
+        <ProfileStatsStrip meta={persisted.meta} />
 
         {authChecked && authEmail ? (
           <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">

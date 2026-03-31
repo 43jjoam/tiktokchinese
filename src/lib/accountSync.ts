@@ -4,6 +4,11 @@ import { getDeviceHashForEngagement } from './deviceHash'
 import { getSupabaseClient } from './deckService'
 import { hydrateEngagementLocalListsFromCloud } from './engagementService'
 import { getProfileDisplayName, setProfileDisplayNameFromCloud } from './profileDisplayName'
+import {
+  profileStatsColumnsForUpsert,
+  remoteStatsFromDbRow,
+  type RemoteProfileStats,
+} from './profileStats'
 import { getSupabaseFunctionsBaseUrl } from './supabaseFunctionsUrl'
 import {
   clearCurrentWordId,
@@ -168,6 +173,22 @@ function applyProfilePayload(p: StoredLearningProfilePayload): void {
   notifyPersistedStateReplaced()
 }
 
+/** DB stats columns win over JSON `meta` for these fields (see `user_learning_profiles` migration). */
+function applyRemoteStatsToLocal(stats: RemoteProfileStats): void {
+  const prev = loadPersistedState()
+  savePersistedState({
+    ...prev,
+    meta: {
+      ...prev.meta,
+      lastActiveDate: stats.lastActiveDate,
+      currentStreak: stats.currentStreak,
+      totalDaysActive: stats.totalDaysActive,
+      bonusCardsUnlocked: stats.bonusCardsUnlocked,
+    },
+  })
+  notifyPersistedStateReplaced()
+}
+
 /** Turn Supabase / SMTP errors into short copy for the sign-in modal (avoid raw API strings). */
 function userFacingOtpEmailError(raw: string): string {
   const m = raw.toLowerCase()
@@ -297,6 +318,7 @@ export async function uploadLearningProfileFromLocal(): Promise<
   if (!session?.user?.id) return { ok: false, error: 'no_session' }
 
   const body = buildUploadPayload()
+  const statsCols = profileStatsColumnsForUpsert(loadPersistedState().meta)
   const attempts = 3
   const baseMs = 450
   let lastMessage = 'unknown_error'
@@ -308,6 +330,7 @@ export async function uploadLearningProfileFromLocal(): Promise<
         {
           user_id: session.user.id,
           payload: body as unknown as Record<string, unknown>,
+          ...statsCols,
         },
         { onConflict: 'user_id' },
       )
@@ -519,6 +542,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
     const remote = await fetchRemoteLearningProfile()
     if (remote) {
       applyProfilePayload(remote.payload)
+      applyRemoteStatsToLocal(remote.stats)
       const next = loadPersistedState()
       savePersistedState({
         ...next,
@@ -616,7 +640,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
 }
 
 export async function fetchRemoteLearningProfile(): Promise<
-  { payload: StoredLearningProfilePayload; updated_at: string } | null
+  { payload: StoredLearningProfilePayload; updated_at: string; stats: RemoteProfileStats } | null
 > {
   const supabase = getSupabaseClient()
   if (!supabase) return null
@@ -632,14 +656,20 @@ export async function fetchRemoteLearningProfile(): Promise<
   for (let i = 0; i < attempts; i++) {
     const { data, error } = await supabase
       .from('user_learning_profiles')
-      .select('payload, updated_at')
+      .select(
+        'payload, updated_at, last_active_date, current_streak, total_days_active, bonus_cards_unlocked',
+      )
       .eq('user_id', uid)
       .maybeSingle()
 
     if (!error && data?.payload) {
       const normalized = normalizeProfilePayload(data.payload)
       if (!normalized) return null
-      return { payload: normalized, updated_at: data.updated_at as string }
+      return {
+        payload: normalized,
+        updated_at: data.updated_at as string,
+        stats: remoteStatsFromDbRow(data),
+      }
     }
     if (error) {
       const code = typeof error.code === 'string' ? error.code : undefined
@@ -675,6 +705,7 @@ export async function mergeRemoteProfileIfNewer(expectedUserId: string): Promise
   }
 
   applyProfilePayload(remote.payload)
+  applyRemoteStatsToLocal(remote.stats)
   const next = loadPersistedState()
   savePersistedState({
     ...next,

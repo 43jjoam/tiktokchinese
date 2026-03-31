@@ -1359,13 +1359,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     return () => window.clearInterval(id)
   }, [swipeTransitionLine, tryCompleteSwipeEncouragement])
 
+  /**
+   * Always arm a fallback: plain `video_url` clips had no timeout (only yt/signed did), so desktop
+   * browsers that never fired loadeddata/canplay left the swipe encouragement stuck forever.
+   */
   useEffect(() => {
-    if (!ytId && !needsSignedNativeUrl) return
     const t = window.setTimeout(() => {
       markFeedPlayable()
-    }, 12000)
+    }, 10_000)
     return () => window.clearTimeout(t)
-  }, [currentWord.word_id, ytId, needsSignedNativeUrl, markFeedPlayable])
+  }, [currentWord.word_id, markFeedPlayable])
 
   const likedRef = useRef(false)
   likedRef.current = liked
@@ -1621,6 +1624,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         roll: Math.random(),
         sessionsServed: snap.meta.sessionsServed,
       })
+      /* Next clip must signal readiness — ignore canplay/loadeddata from the previous video. */
+      feedBufferedRef.current = false
       setCurrentWordId(nextWord.word_id)
       finalizedRef.current = false
     }, advanceDelay)
@@ -1892,7 +1897,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
               className="h-full w-full min-h-0 object-cover md:h-auto md:max-h-[100dvh] md:w-auto md:max-w-[100vw] md:object-contain"
               style={{ pointerEvents: 'none' }}
               onLoadedData={() => markFeedPlayable()}
+              onLoadedMetadata={() => markFeedPlayable()}
               onCanPlay={() => markFeedPlayable()}
+              onCanPlayThrough={() => markFeedPlayable()}
+              onPlaying={() => markFeedPlayable()}
               onError={() => {
                 // Tertiary backup: signed URL or first load failed decode → try static video_url → then YouTube.
                 const w = currentWordRef.current
@@ -1932,7 +1940,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
             className="h-full w-full min-h-0 object-cover md:h-auto md:max-h-[100dvh] md:w-auto md:max-w-[100vw] md:object-contain"
             style={{ pointerEvents: 'none' }}
             onLoadedData={() => markFeedPlayable()}
+            onLoadedMetadata={() => markFeedPlayable()}
             onCanPlay={() => markFeedPlayable()}
+            onCanPlayThrough={() => markFeedPlayable()}
+            onPlaying={() => markFeedPlayable()}
             onEnded={(ev) => {
               const v = ev.currentTarget
               try {

@@ -141,7 +141,8 @@ export function YouTubeEmbedPlayer({ videoId, onPlaying }: Props) {
     const armFallback = () => {
       clearFallback()
       firedRef.current = false
-      playingFallbackTimer = window.setTimeout(() => firePlayingOnce(), 1500)
+      /* Desktop / slow networks: PLAYING can arrive late; avoid stuck swipe encouragement. */
+      playingFallbackTimer = window.setTimeout(() => firePlayingOnce(), 4000)
     }
 
     const matchesCurrentVideo = (player: any) => {

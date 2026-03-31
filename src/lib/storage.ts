@@ -25,6 +25,11 @@ export type AppMeta = {
   lastMergedRemoteUpdatedAt?: string | null
   /** Supabase `user.id` that `lastMergedRemoteUpdatedAt` refers to — avoids skipping merge for the wrong account */
   lastCloudProfileUserId?: string | null
+  /** UTC calendar day `YYYY-MM-DD`; mirrors `user_learning_profiles.last_active_date` when signed in */
+  lastActiveDate?: string | null
+  currentStreak?: number
+  totalDaysActive?: number
+  bonusCardsUnlocked?: number
 }
 
 export type PersistedState = {
@@ -40,6 +45,10 @@ export const DEFAULT_STUDY_META: AppMeta = {
   first20Tapped: 0,
   alphaFrozen: false,
   alphaValue: 1.0,
+  lastActiveDate: null,
+  currentStreak: 0,
+  totalDaysActive: 0,
+  bonusCardsUnlocked: 0,
 }
 
 const defaultMeta = DEFAULT_STUDY_META
