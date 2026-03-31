@@ -10,6 +10,11 @@ export type CatalogDeck = {
   subtitle: string
   /** Short line on locked card art (e.g. "HSK 1"); falls back to `title`. */
   lockOverlayTitle?: string
+  /**
+   * HSK 2–6 and Pinyin: not purchasable/openable from Library; card shows product art + footer
+   * like "HSK-2 coming soon". Only catalog key `hsk-1` is interactive (shop / contents).
+   */
+  comingSoon?: boolean
   shopUrl: string
   /** Same image as `decks.cover_image_url` when owned — shown dimmed for unpurchased cards. */
   previewCoverUrl?: string
@@ -70,6 +75,19 @@ export function catalogKeyFromDeckId(deckId: string): string | undefined {
   return shortKey
 }
 
+/** Bottom strip on HSK 1 deck contents — matches Library messaging for other products. */
+export const DECK_PROFILE_COMING_SOON_LINE_HSK1 = 'HSK 2–6 and Pinyin: coming soon'
+
+/** Footer line for Library “coming soon” product cards (e.g. `HSK-2 coming soon`). */
+export function formatCatalogComingSoonFooter(item: CatalogDeck): string {
+  if (item.key.startsWith('hsk-')) {
+    const n = item.key.slice('hsk-'.length)
+    return `HSK-${n} coming soon`
+  }
+  if (item.key === 'pinyin') return 'Pinyin coming soon'
+  return 'Coming soon'
+}
+
 export const DECK_CATALOG: CatalogDeck[] = [
   {
     key: 'hsk-1',
@@ -84,6 +102,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-2',
     title: 'HSK 2',
     subtitle: 'Digital flashcards',
+    comingSoon: true,
     shopUrl:
       'https://bestling.net/products/hsk-2-digital-flashcards-learn-chinese-vocabulary-with-audio-support',
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk2 || matchHskLevel(d.name, 2),
@@ -93,6 +112,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-3',
     title: 'HSK 3',
     subtitle: 'Digital flashcards',
+    comingSoon: true,
     shopUrl: product('hsk-3-digital-flashcards'),
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk3 || matchHskLevel(d.name, 3),
     accent: 'teal',
@@ -101,6 +121,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-4',
     title: 'HSK 4',
     subtitle: 'Digital flashcards',
+    comingSoon: true,
     shopUrl: product('hsk-4-digital-flashcards'),
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk4 || matchHskLevel(d.name, 4),
     accent: 'sky',
@@ -109,6 +130,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-5',
     title: 'HSK 5',
     subtitle: 'Digital flashcards',
+    comingSoon: true,
     shopUrl:
       'https://bestling.net/products/hsk-5-digital-flashcards?pr_prod_strat=e5_desc&pr_rec_id=1dc96617a&pr_rec_pid=9109905703149&pr_ref_pid=9108570833133&pr_seq=uniform',
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk5 || matchHskLevel(d.name, 5),
@@ -118,6 +140,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'hsk-6',
     title: 'HSK 6',
     subtitle: 'Digital flashcards',
+    comingSoon: true,
     shopUrl:
       'https://bestling.net/products/hsk-6-digital-flashcards?pr_prod_strat=e5_desc&pr_rec_id=6316b7400&pr_rec_pid=9109915533549&pr_ref_pid=9109905703149&pr_seq=uniform',
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk6 || matchHskLevel(d.name, 6),
@@ -127,6 +150,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     key: 'pinyin',
     title: 'Pinyin',
     subtitle: 'Flashcards',
+    comingSoon: true,
     shopUrl: product('pinyin-flashcards'),
     matches: (d) => d.id === CATALOG_DECK_IDS.pinyin || matchPinyin(d.name),
     accent: 'rose',

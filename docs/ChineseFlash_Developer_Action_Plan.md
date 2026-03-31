@@ -6,7 +6,7 @@ Source: *ChineseFlash_Developer_Action_Plan.docx* (v1.0 · March 2026). Use this
 |------|------|--------|
 | 1 | Fix activation: verify DB at creation vs redemption; correct order of operations | **Redemption path updated** (`deckService` + `redeem-activation`: load deck → then redeem; row pick + `.is('redeemed_by', null)`). Webhook: allocate codes per order (`shopify-webhook` + `setup_activation_codes_shopify_allocation.sql`). **Manual:** confirm rows in Table Editor (`redeemed_by` null for new codes). |
 | 2 | Profile fields: `last_active_date`, `current_streak`, `total_days_active`, `bonus_cards_unlocked` | **Done (app + SQL)** — columns on `user_learning_profiles` (`setup_user_profile_stats_columns.sql`); mirrored in `AppMeta`; upload/merge in `accountSync`; Profile strip. **Manual:** run SQL on Supabase. Streak *increment* = Step 4. |
-| 3 | Referral fields: `referral_code`, `referred_by`, `referral_count` | Not started |
+| 3 | Referral fields: `referral_code`, `referred_by`, `referral_count` | **Done (app + SQL)** — `setup_user_profile_referral_columns.sql`; `AppMeta` + sync; client generates `referral_code` on upload (collision retry); `referral_count` server-side only on upsert. **Manual:** run SQL. `?ref=` + bonuses = Steps 7–8. |
 | 4 | Streak logic on first card watch of session | Not started |
 | 5 | Unlock choice screen after swipe-20 auth (three paths) | Not started |
 | 6 | Wire Buy → Bestling / Shopify (activation after Step 1) | Not started |

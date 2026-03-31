@@ -5,6 +5,13 @@ import { getSupabaseClient } from './deckService'
 import { hydrateEngagementLocalListsFromCloud } from './engagementService'
 import { getProfileDisplayName, setProfileDisplayNameFromCloud } from './profileDisplayName'
 import {
+  generateReferralCodeCandidate,
+  isReferralCodeUniqueViolation,
+  profileReferralColumnsForUpsert,
+  remoteReferralFromDbRow,
+  type RemoteReferralFields,
+} from './profileReferral'
+import {
   profileStatsColumnsForUpsert,
   remoteStatsFromDbRow,
   type RemoteProfileStats,
@@ -173,8 +180,8 @@ function applyProfilePayload(p: StoredLearningProfilePayload): void {
   notifyPersistedStateReplaced()
 }
 
-/** DB stats columns win over JSON `meta` for these fields (see `user_learning_profiles` migration). */
-function applyRemoteStatsToLocal(stats: RemoteProfileStats): void {
+/** DB columns win over JSON `meta` for stats + referral (see `user_learning_profiles` migrations). */
+function applyRemoteProfileDbColumnsToLocal(stats: RemoteProfileStats, referral: RemoteReferralFields): void {
   const prev = loadPersistedState()
   savePersistedState({
     ...prev,
@@ -184,9 +191,29 @@ function applyRemoteStatsToLocal(stats: RemoteProfileStats): void {
       currentStreak: stats.currentStreak,
       totalDaysActive: stats.totalDaysActive,
       bonusCardsUnlocked: stats.bonusCardsUnlocked,
+      referralCode: referral.referralCode,
+      referredByUserId: referral.referredByUserId,
+      referralCount: referral.referralCount,
     },
   })
   notifyPersistedStateReplaced()
+}
+
+function ensureReferralCodeBeforeUpload(): void {
+  const s = loadPersistedState()
+  if (s.meta.referralCode?.trim()) return
+  savePersistedState({
+    ...s,
+    meta: { ...s.meta, referralCode: generateReferralCodeCandidate() },
+  })
+}
+
+function regenerateReferralCodeLocal(): void {
+  const s = loadPersistedState()
+  savePersistedState({
+    ...s,
+    meta: { ...s.meta, referralCode: generateReferralCodeCandidate() },
+  })
 }
 
 /** Turn Supabase / SMTP errors into short copy for the sign-in modal (avoid raw API strings). */
@@ -317,39 +344,56 @@ export async function uploadLearningProfileFromLocal(): Promise<
   } = await supabase.auth.getSession()
   if (!session?.user?.id) return { ok: false, error: 'no_session' }
 
-  const body = buildUploadPayload()
-  const statsCols = profileStatsColumnsForUpsert(loadPersistedState().meta)
+  ensureReferralCodeBeforeUpload()
   const attempts = 3
   const baseMs = 450
   let lastMessage = 'unknown_error'
 
   for (let i = 0; i < attempts; i++) {
-    const { data, error } = await supabase
-      .from('user_learning_profiles')
-      .upsert(
-        {
-          user_id: session.user.id,
-          payload: body as unknown as Record<string, unknown>,
-          ...statsCols,
-        },
-        { onConflict: 'user_id' },
-      )
-      .select('updated_at')
-      .single()
+    let codeTries = 0
+    while (codeTries < 8) {
+      codeTries++
+      const body = buildUploadPayload()
+      const statsCols = profileStatsColumnsForUpsert(loadPersistedState().meta)
+      const referralCols = profileReferralColumnsForUpsert(loadPersistedState().meta)
+      const { data, error } = await supabase
+        .from('user_learning_profiles')
+        .upsert(
+          {
+            user_id: session.user.id,
+            payload: body as unknown as Record<string, unknown>,
+            ...statsCols,
+            ...referralCols,
+          },
+          { onConflict: 'user_id' },
+        )
+        .select('updated_at')
+        .single()
 
-    if (!error && data?.updated_at) {
-      return { ok: true, updated_at: data.updated_at as string }
-    }
-    if (error) {
-      lastMessage = error.message
-      const code = typeof error.code === 'string' ? error.code : undefined
-      const retry = i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)
-      if (!retry) return { ok: false, error: error.message }
-    } else {
+      if (!error && data?.updated_at) {
+        return { ok: true, updated_at: data.updated_at as string }
+      }
+      if (error && isReferralCodeUniqueViolation(error)) {
+        regenerateReferralCodeLocal()
+        lastMessage = error.message
+        if (codeTries >= 8) {
+          return { ok: false, error: 'Could not assign a unique invite code. Try Sync again.' }
+        }
+        continue
+      }
+      if (error) {
+        lastMessage = error.message
+        const code = typeof error.code === 'string' ? error.code : undefined
+        const retry = i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)
+        if (!retry) return { ok: false, error: error.message }
+        await sleep(baseMs * Math.pow(2, i))
+        break
+      }
       lastMessage = 'no_timestamp'
       if (i === attempts - 1) return { ok: false, error: 'no_timestamp' }
+      await sleep(baseMs * Math.pow(2, i))
+      break
     }
-    await sleep(baseMs * Math.pow(2, i))
   }
   return { ok: false, error: lastMessage }
 }
@@ -542,7 +586,7 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
     const remote = await fetchRemoteLearningProfile()
     if (remote) {
       applyProfilePayload(remote.payload)
-      applyRemoteStatsToLocal(remote.stats)
+      applyRemoteProfileDbColumnsToLocal(remote.stats, remote.referral)
       const next = loadPersistedState()
       savePersistedState({
         ...next,
@@ -640,7 +684,13 @@ export async function syncCloudProfileAfterAuth(userId: string): Promise<SyncClo
 }
 
 export async function fetchRemoteLearningProfile(): Promise<
-  { payload: StoredLearningProfilePayload; updated_at: string; stats: RemoteProfileStats } | null
+  | {
+      payload: StoredLearningProfilePayload
+      updated_at: string
+      stats: RemoteProfileStats
+      referral: RemoteReferralFields
+    }
+  | null
 > {
   const supabase = getSupabaseClient()
   if (!supabase) return null
@@ -657,7 +707,7 @@ export async function fetchRemoteLearningProfile(): Promise<
     const { data, error } = await supabase
       .from('user_learning_profiles')
       .select(
-        'payload, updated_at, last_active_date, current_streak, total_days_active, bonus_cards_unlocked',
+        'payload, updated_at, last_active_date, current_streak, total_days_active, bonus_cards_unlocked, referral_code, referred_by, referral_count',
       )
       .eq('user_id', uid)
       .maybeSingle()
@@ -669,6 +719,7 @@ export async function fetchRemoteLearningProfile(): Promise<
         payload: normalized,
         updated_at: data.updated_at as string,
         stats: remoteStatsFromDbRow(data),
+        referral: remoteReferralFromDbRow(data),
       }
     }
     if (error) {
@@ -705,7 +756,7 @@ export async function mergeRemoteProfileIfNewer(expectedUserId: string): Promise
   }
 
   applyProfilePayload(remote.payload)
-  applyRemoteStatsToLocal(remote.stats)
+  applyRemoteProfileDbColumnsToLocal(remote.stats, remote.referral)
   const next = loadPersistedState()
   savePersistedState({
     ...next,

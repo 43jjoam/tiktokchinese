@@ -6,6 +6,7 @@ import {
   catalogAccentClass,
   catalogBarGradient,
   findOwnedDeck,
+  formatCatalogComingSoonFooter,
   getCatalogPreviewCoverUrl,
 } from '../data/deckCatalog'
 
@@ -54,6 +55,10 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
       {DECK_CATALOG.map((item) => {
         const matched = findOwnedDeck(item, decks)
         const owned = matched !== undefined
+        /** Only HSK 1 opens the shop or deck contents; HSK 2–6 / Pinyin stay visible but non-interactive. */
+        const canTap = item.key === 'hsk-1'
+        const staticCatalogCard = !canTap
+        const hideCoverTitleOverlay = owned && item.key === 'hsk-1'
         const bar = catalogBarGradient(item.accent)
         const previewCover =
           getCatalogPreviewCoverUrl(item) ?? catalogCoverByKey?.[item.key]
@@ -61,8 +66,10 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
         /** Same product art as when owned; locked cards stay readable but muted vs purchased. */
         const coverUrl = ownedCover || previewCover
         const lockedDimmed = !owned && Boolean(coverUrl)
+        const dimCoverArt = staticCatalogCard || lockedDimmed
 
         const onActivate = () => {
+          if (!canTap) return
           if (owned && matched) {
             onSelectOwnedDeck(matched)
             return
@@ -70,62 +77,98 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
           window.open(item.shopUrl, '_blank', 'noopener')
         }
 
-        return (
-          <button
-            key={item.key}
-            type="button"
-            onClick={onActivate}
-            className={`overflow-hidden rounded-xl border text-left transition-transform active:scale-[0.98] ${catalogAccentClass(item.accent, owned)}`}
-          >
-            <div className="relative aspect-[3/4] w-full overflow-hidden">
-              {coverUrl ? (
-                <>
-                  <img
-                    src={coverUrl}
-                    alt=""
-                    className={`absolute inset-0 h-full w-full object-cover ${
-                      lockedDimmed
-                        ? 'brightness-[0.8] contrast-[0.9] saturate-[0.88]'
-                        : ''
-                    }`}
+        const cardClassName = `overflow-hidden rounded-xl border text-left ${catalogAccentClass(item.accent, owned)} ${
+          canTap ? 'transition-transform active:scale-[0.98]' : 'cursor-default'
+        }`
+
+        const coverBlock = (
+          <div className="relative aspect-[3/4] w-full overflow-hidden">
+            {coverUrl ? (
+              <>
+                <img
+                  src={coverUrl}
+                  alt=""
+                  className={`absolute inset-0 h-full w-full object-cover ${
+                    dimCoverArt ? 'brightness-[0.8] contrast-[0.9] saturate-[0.88]' : ''
+                  }`}
+                />
+                {dimCoverArt ? (
+                  <div
+                    className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-black/28 to-black/45"
+                    aria-hidden
                   />
-                  {lockedDimmed ? (
-                    <div
-                      className="pointer-events-none absolute inset-0 bg-gradient-to-b from-black/20 via-black/28 to-black/45"
-                      aria-hidden
-                    />
-                  ) : null}
+                ) : null}
+                {!hideCoverTitleOverlay ? (
                   <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-3 text-center">
                     <span
                       className={
-                        lockedDimmed
+                        dimCoverArt
                           ? 'text-2xl font-bold leading-tight tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] sm:text-[1.65rem]'
                           : 'text-xl font-bold leading-tight tracking-tight text-white drop-shadow'
                       }
                     >
-                      {lockedDimmed ? (item.lockOverlayTitle ?? item.title) : (matched?.name ?? item.title)}
+                      {staticCatalogCard
+                        ? 'Coming soon'
+                        : lockedDimmed
+                          ? (item.lockOverlayTitle ?? item.title)
+                          : (matched?.name ?? item.title)}
                     </span>
                   </div>
-                </>
-              ) : (
-                <>
-                  <div className={`absolute inset-0 bg-gradient-to-br ${bar} opacity-[0.55]`} />
+                ) : null}
+              </>
+            ) : (
+              <>
+                <div className={`absolute inset-0 bg-gradient-to-br ${bar} opacity-[0.55]`} />
+                {!hideCoverTitleOverlay ? (
                   <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center px-3 text-center">
                     <span className="text-2xl font-bold leading-tight tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.85)] sm:text-[1.65rem]">
-                      {item.lockOverlayTitle ?? item.title}
+                      {staticCatalogCard ? 'Coming soon' : (item.lockOverlayTitle ?? item.title)}
                     </span>
                   </div>
-                </>
-              )}
+                ) : null}
+              </>
+            )}
+          </div>
+        )
+
+        const footerBlock = (
+          <div className="px-3 py-2">
+            {staticCatalogCard ? (
+              <p className="text-[10px] font-medium leading-snug text-white/55">
+                {formatCatalogComingSoonFooter(item)}
+              </p>
+            ) : (
+              <>
+                <div className={`text-xs font-semibold leading-tight ${owned ? 'truncate text-white' : 'text-white'}`}>
+                  {owned ? (matched?.name ?? item.title) : (item.lockOverlayTitle ?? item.title)}
+                </div>
+                <div
+                  className={`mt-0.5 text-[10px] leading-snug ${owned ? 'truncate text-white/60' : 'text-white/55'}`}
+                >
+                  {owned ? 'Tap for contents' : LOCKED_DECK_UNLOCK_HINT}
+                </div>
+              </>
+            )}
+          </div>
+        )
+
+        if (!canTap) {
+          return (
+            <div
+              key={item.key}
+              className={cardClassName}
+              aria-label={formatCatalogComingSoonFooter(item)}
+            >
+              {coverBlock}
+              {footerBlock}
             </div>
-            <div className="px-3 py-2">
-              <div className={`text-xs font-semibold leading-tight ${owned ? 'truncate text-white' : 'text-white'}`}>
-                {owned ? (matched?.name ?? item.title) : (item.lockOverlayTitle ?? item.title)}
-              </div>
-              <div className={`mt-0.5 text-[10px] leading-snug ${owned ? 'truncate text-white/60' : 'text-white/55'}`}>
-                {owned ? 'Tap for contents' : LOCKED_DECK_UNLOCK_HINT}
-              </div>
-            </div>
+          )
+        }
+
+        return (
+          <button key={item.key} type="button" onClick={onActivate} className={cardClassName}>
+            {coverBlock}
+            {footerBlock}
           </button>
         )
       })}

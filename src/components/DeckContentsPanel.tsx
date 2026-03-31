@@ -5,6 +5,11 @@ import { bandDeckWordsByCubeTier } from '../lib/cubeVaultSort'
 import { getWordsForDeck } from '../lib/deckWords'
 import { prefetchLessonVideoSignedUrls } from '../lib/storageVideoUrl'
 import { loadPersistedState } from '../lib/storage'
+import {
+  DECK_CATALOG,
+  DECK_PROFILE_COMING_SOON_LINE_HSK1,
+  formatCatalogComingSoonFooter,
+} from '../data/deckCatalog'
 import type { DeckInfo } from '../lib/deckService'
 import type { WordMetadata, WordState } from '../lib/types'
 import { CubeVaultGrid } from './CubeVaultGrid'
@@ -35,6 +40,13 @@ export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
   const { wordStates } = useMemo(() => loadPersistedState(), [storageRev])
   const words = useMemo(() => getWordsForDeck(deck), [deck])
   const bands = useMemo(() => bandDeckWordsByCubeTier(words, wordStates), [words, wordStates])
+  const catalogEntry = useMemo(() => DECK_CATALOG.find((c) => c.matches(deck)), [deck])
+  const deckProfileComingSoonLine = useMemo(() => {
+    if (!catalogEntry) return null
+    if (catalogEntry.comingSoon) return formatCatalogComingSoonFooter(catalogEntry)
+    if (catalogEntry.key === 'hsk-1') return DECK_PROFILE_COMING_SOON_LINE_HSK1
+    return null
+  }, [catalogEntry])
 
   const sections = (
     [
@@ -102,6 +114,17 @@ export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
               </div>
             )}
           </div>
+
+          {deckProfileComingSoonLine ? (
+            <div
+              className="shrink-0 border-t border-white/10 bg-black/90 px-5 py-3 backdrop-blur-xl"
+              style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }}
+            >
+              <p className="text-center text-[11px] font-medium leading-snug text-white/50">
+                {deckProfileComingSoonLine}
+              </p>
+            </div>
+          ) : null}
         </div>
       </motion.div>
 

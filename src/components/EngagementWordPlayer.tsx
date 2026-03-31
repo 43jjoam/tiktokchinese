@@ -188,15 +188,8 @@ export function EngagementWordPlayer({
     if (!extractedYoutubeId) return null
     if (!activeWord.use_video_url) return extractedYoutubeId
     if (youtubeFallback) return extractedYoutubeId
-    if (needsSignedNativeUrl && !nativePlaybackSrc) return extractedYoutubeId
     return null
-  }, [
-    activeWord.use_video_url,
-    extractedYoutubeId,
-    youtubeFallback,
-    needsSignedNativeUrl,
-    nativePlaybackSrc,
-  ])
+  }, [activeWord.use_video_url, extractedYoutubeId, youtubeFallback])
 
   useEffect(() => {
     setYoutubeFallback(false)
@@ -593,8 +586,23 @@ export function EngagementWordPlayer({
 
   const posterUrl = useMemo(() => youtubePosterUrlForWord(activeWord), [activeWord])
 
-  const missingVideo =
-    !ytId && !(needsSignedNativeUrl && nativePlaybackSrc) && !(activeWord.video_url && !needsSignedNativeUrl)
+  /**
+   * True only when the catalog has no video source at all. Do **not** treat “signed URL still
+   * loading” as missing — HSK and similar rows often have Storage + static `video_url` but no
+   * `youtube_url`; the old formula set this true before `nativePlaybackSrc` resolved and showed
+   * “No playable video” incorrectly.
+   */
+  const missingVideo = useMemo(() => {
+    const hasYoutube = Boolean(extractedYoutubeId)
+    const hasStorage = Boolean(activeWord.use_video_url && activeWord.video_storage_path?.trim())
+    const hasDirectUrl = Boolean(activeWord.video_url?.trim())
+    return !hasYoutube && !hasStorage && !hasDirectUrl
+  }, [
+    extractedYoutubeId,
+    activeWord.use_video_url,
+    activeWord.video_storage_path,
+    activeWord.video_url,
+  ])
 
   useEffect(() => {
     if (missingVideo) {

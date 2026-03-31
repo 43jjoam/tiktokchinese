@@ -1101,10 +1101,9 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [currentWord.youtube_url])
 
   /**
-   * When `use_video_url` is true: primary = Supabase signed URL (per-word bucket, e.g. Chinese
-   * Characters 1 or HSK_1). If signing fails or is unavailable and `youtube_url` exists, we switch
-   * here immediately (same as Characters 1 intent). Otherwise secondary = static `video_url`.
-   * Tertiary: native `<video>` onError after signed URL then `video_url` both fail → YouTube Shorts.
+   * When `use_video_url` is true: **playback order** = (1) Supabase signed URL, (2) static
+   * `video_url` on native `<video>` error, (3) `youtube_url` Shorts via `youtubeFallback`.
+   * We do **not** start YouTube while the signed URL is still loading — avoids YouTube-before-Storage.
    */
   const [youtubeFallback, setYoutubeFallback] = useState(false)
 
@@ -1125,16 +1124,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (!extractedYoutubeId) return null
     if (!currentWord.use_video_url) return extractedYoutubeId
     if (youtubeFallback) return extractedYoutubeId
-    // Avoid a blank layer while Storage signing runs (slow / flaky networks, first load).
-    if (needsSignedNativeUrl && !displayNativePlaybackSrc) return extractedYoutubeId
     return null
-  }, [
-    currentWord.use_video_url,
-    extractedYoutubeId,
-    youtubeFallback,
-    needsSignedNativeUrl,
-    displayNativePlaybackSrc,
-  ])
+  }, [currentWord.use_video_url, extractedYoutubeId, youtubeFallback])
 
   useEffect(() => {
     setYoutubeFallback(false)

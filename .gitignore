@@ -1,6 +1,8 @@
 node_modules
 dist
 venv
+.venv-numbers
+.tmp_numbers
 *.pyc
 __pycache__
 .DS_Store

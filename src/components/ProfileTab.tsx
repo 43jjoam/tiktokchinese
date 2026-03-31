@@ -639,7 +639,7 @@ export default function ProfileTab() {
   const supabaseConfigured = Boolean(getSupabaseClient())
 
   return (
-    <div className="relative z-10 flex h-dvh flex-col overflow-hidden bg-black">
+    <div className="relative z-10 mx-auto flex h-dvh w-full flex-col overflow-hidden bg-black md:w-[min(100vw,calc(100dvh*9/16))]">
       <header className="shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
         {!authChecked && supabaseConfigured ? (
           <p className="text-sm text-white/50">Checking account…</p>
@@ -677,6 +677,15 @@ export default function ProfileTab() {
         </button>
 
         <ProfileStatsStrip meta={persisted.meta} />
+
+        {authChecked && authEmail && persisted.meta.referralCode ? (
+          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-white/40">Invite code</span>
+            <span className="font-mono text-sm font-semibold tracking-wider text-white" title="Share in a later update">
+              {persisted.meta.referralCode}
+            </span>
+          </div>
+        ) : null}
 
         {authChecked && authEmail ? (
           <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">

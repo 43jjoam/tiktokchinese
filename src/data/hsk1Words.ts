@@ -1,4 +1,5 @@
 import type { WordMetadata } from '../lib/types'
+import { HSK1_YOUTUBE_URLS } from './hsk1YoutubeUrls'
 
 /**
  * HSK 1 Digital Flashcards — private bucket `HSK_1`, folder `success_ones/`.
@@ -9,7 +10,7 @@ import type { WordMetadata } from '../lib/types'
  * `video_url` under /videos/. Add a Shorts URL per row from your video log so learners still see
  * the clip when Storage is down.
  */
-export const hsk1Words: WordMetadata[] = [
+const rawHsk1Words: WordMetadata[] = [
   {
     word_id: "hsk1-air-122",
     character: "气",
@@ -1316,3 +1317,8 @@ export const hsk1Words: WordMetadata[] = [
     deck_catalog_keys: ['hsk-1'],
   },
 ]
+
+export const hsk1Words: WordMetadata[] = rawHsk1Words.map((w) => ({
+  ...w,
+  youtube_url: HSK1_YOUTUBE_URLS[w.word_id] ?? w.youtube_url,
+}))

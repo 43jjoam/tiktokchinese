@@ -30,6 +30,11 @@ export type AppMeta = {
   currentStreak?: number
   totalDaysActive?: number
   bonusCardsUnlocked?: number
+  /** Shareable code; mirrors `user_learning_profiles.referral_code` when signed in */
+  referralCode?: string | null
+  /** Referrer `auth.users.id`; mirrors `referred_by` */
+  referredByUserId?: string | null
+  referralCount?: number
 }
 
 export type PersistedState = {
@@ -49,6 +54,9 @@ export const DEFAULT_STUDY_META: AppMeta = {
   currentStreak: 0,
   totalDaysActive: 0,
   bonusCardsUnlocked: 0,
+  referralCode: null,
+  referredByUserId: null,
+  referralCount: 0,
 }
 
 const defaultMeta = DEFAULT_STUDY_META
