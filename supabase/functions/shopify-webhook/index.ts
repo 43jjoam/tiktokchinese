@@ -38,6 +38,19 @@ function normalizeSku(sku: string): string {
   return sku.toLowerCase().replace(/[\s\-_\.]/g, "");
 }
 
+/** PostgREST / Postgres when allocation columns were not migrated yet. */
+function missingShopifyAllocationColumn(err: { message?: string } | null | undefined): boolean {
+  const m = (err?.message ?? "").toLowerCase();
+  return (
+    (m.includes("shopify_allocation_ref") || m.includes("shopify_assigned_at")) &&
+    (m.includes("does not exist") || m.includes("could not find") || m.includes("schema cache"))
+  );
+}
+
+function rowIsUnallocated(ref: string | null | undefined): boolean {
+  return ref == null || String(ref).trim() === "";
+}
+
 function findDeckId(sku: string, title: string): string | null {
   const fromUuid = parseDeckUuidFromSku(sku);
   if (fromUuid) return fromUuid;
@@ -162,8 +175,10 @@ Deno.serve(async (req) => {
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const results: string[] = [];
+  const orderKey = String(order.id ?? order.name ?? "unknown");
 
-  for (const item of order.line_items ?? []) {
+  for (let lineIndex = 0; lineIndex < (order.line_items ?? []).length; lineIndex++) {
+    const item = order.line_items![lineIndex]!;
     const deckId = findDeckId(item.sku ?? "", item.title ?? "");
     if (!deckId) {
       console.log(
@@ -178,26 +193,167 @@ Deno.serve(async (req) => {
       continue;
     }
 
-    const { data: codeRows, error: codeErr } = await supabase
+    /** One stable ref per order line — Shopify retries reuse the same code + email. */
+    const allocationRef = `${orderKey}:${item.id ?? `idx${lineIndex}`}`;
+
+    const { data: alreadyRow, error: alreadyErr } = await supabase
       .from("activation_codes")
-      .select("id, code, deck_id, redeemed_by")
-      .eq("deck_id", deckId)
-      .limit(50);
+      .select("code")
+      .eq("shopify_allocation_ref", allocationRef)
+      .maybeSingle();
 
-    const codeRow = codeRows?.find(
-      (r: any) => !r.redeemed_by || r.redeemed_by === "",
-    ) ?? null;
+    let codeToSend: string | null = !alreadyErr && alreadyRow?.code ? alreadyRow.code : null;
 
-    if (codeErr || !codeRow) {
-      console.error(
+    /** False → DB has no allocation columns (run setup_activation_codes_shopify_allocation.sql). */
+    let useAllocation = !missingShopifyAllocationColumn(alreadyErr);
+    if (alreadyErr && missingShopifyAllocationColumn(alreadyErr)) {
+      console.warn(
         JSON.stringify({
-          tag: "shopify_webhook_no_code",
-          deckId,
-          codeErr: codeErr?.message ?? null,
-          rowCount: codeRows?.length ?? 0,
+          tag: "shopify_webhook_allocation_columns_missing",
+          hint: "Run supabase/setup_activation_codes_shopify_allocation.sql",
         }),
       );
-      results.push(`ERROR: No unused codes left for deck ${deckId}`);
+    }
+
+    if (!codeToSend) {
+      const maxAttempts = 12;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        if (!useAllocation) {
+          const { data: legacyRow, error: legErr } = await supabase
+            .from("activation_codes")
+            .select("code")
+            .eq("deck_id", deckId)
+            .or("redeemed_by.is.null,redeemed_by.eq.,redeemed_by.eq.EMPTY")
+            .order("id", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (legErr || !legacyRow?.code) {
+            console.error(
+              JSON.stringify({
+                tag: "shopify_webhook_no_code",
+                deckId,
+                allocationRef,
+                mode: "legacy",
+                pickErr: legErr?.message ?? null,
+              }),
+            );
+            break;
+          }
+          codeToSend = legacyRow.code;
+          console.warn(
+            JSON.stringify({
+              tag: "shopify_webhook_legacy_pool",
+              deckId,
+              warning: "Duplicate-email risk until allocation SQL is applied",
+            }),
+          );
+          break;
+        }
+
+        const { data: poolRows, error: poolErr } = await supabase
+          .from("activation_codes")
+          .select("id, code, shopify_allocation_ref")
+          .eq("deck_id", deckId)
+          .or("redeemed_by.is.null,redeemed_by.eq.,redeemed_by.eq.EMPTY")
+          .order("id", { ascending: true })
+          .limit(100);
+
+        if (poolErr) {
+          if (missingShopifyAllocationColumn(poolErr)) {
+            useAllocation = false;
+            attempt--;
+            continue;
+          }
+          console.error(
+            JSON.stringify({
+              tag: "shopify_webhook_no_code",
+              deckId,
+              allocationRef,
+              pickErr: poolErr.message,
+              attempt,
+            }),
+          );
+          break;
+        }
+
+        const candidate = (poolRows ?? []).find((r: { shopify_allocation_ref?: string | null }) =>
+          rowIsUnallocated(r.shopify_allocation_ref),
+        );
+        if (!candidate?.id || !candidate.code) {
+          console.error(
+            JSON.stringify({
+              tag: "shopify_webhook_no_code",
+              deckId,
+              allocationRef,
+              reason: "no_unallocated_row",
+              scanned: poolRows?.length ?? 0,
+            }),
+          );
+          break;
+        }
+
+        const assignedAt = new Date().toISOString();
+        let claimed = await supabase
+          .from("activation_codes")
+          .update({
+            shopify_allocation_ref: allocationRef,
+            shopify_assigned_at: assignedAt,
+          })
+          .eq("id", candidate.id)
+          .or("redeemed_by.is.null,redeemed_by.eq.,redeemed_by.eq.EMPTY")
+          .is("shopify_allocation_ref", null)
+          .select("code")
+          .maybeSingle();
+
+        if (!claimed.data?.code && !claimed.error) {
+          claimed = await supabase
+            .from("activation_codes")
+            .update({
+              shopify_allocation_ref: allocationRef,
+              shopify_assigned_at: assignedAt,
+            })
+            .eq("id", candidate.id)
+            .or("redeemed_by.is.null,redeemed_by.eq.,redeemed_by.eq.EMPTY")
+            .eq("shopify_allocation_ref", "")
+            .select("code")
+            .maybeSingle();
+        }
+
+        if (claimed.error) {
+          if (missingShopifyAllocationColumn(claimed.error)) {
+            useAllocation = false;
+            codeToSend = candidate.code;
+            console.warn(
+              JSON.stringify({
+                tag: "shopify_webhook_send_without_claim",
+                deckId,
+                warning: "Apply setup_activation_codes_shopify_allocation.sql to fix",
+              }),
+            );
+            break;
+          }
+          console.error(
+            JSON.stringify({
+              tag: "shopify_webhook_claim_err",
+              deckId,
+              claimErr: claimed.error.message,
+              attempt,
+            }),
+          );
+          continue;
+        }
+
+        if (claimed.data?.code) {
+          codeToSend = claimed.data.code;
+          break;
+        }
+      }
+    }
+
+    if (!codeToSend) {
+      results.push(
+        `ERROR: No unused codes left for deck ${deckId} (check deck_id matches this product UUID; rows need redeemed_by empty and shopify_allocation_ref empty — run setup_activation_codes_shopify_allocation.sql if missing columns).`,
+      );
       continue;
     }
 
@@ -210,12 +366,14 @@ Deno.serve(async (req) => {
     const deckName = deck?.name ?? item.title ?? "Flashcard Deck";
 
     try {
-      await sendEmail(email, codeRow.code, deckName);
+      await sendEmail(email, codeToSend, deckName);
       console.log(
         JSON.stringify({
           tag: "shopify_webhook_email_sent",
           deckId,
           deckName,
+          allocationRef,
+          idempotentResend: Boolean(alreadyRow?.code),
         }),
       );
     } catch (e) {
@@ -223,6 +381,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           tag: "shopify_webhook_resend_failed",
           deckId,
+          allocationRef,
           error: String(e),
         }),
       );

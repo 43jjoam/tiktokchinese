@@ -27,6 +27,38 @@ function activationCodeLookupValues(trimmed: string): string[] {
   ].filter((c) => c.length > 0);
 }
 
+type CodeRow = {
+  id: string;
+  code: string;
+  deck_id: string;
+  redeemed_by: string | null;
+};
+
+function redeemedByIsUnset(value: string | null | undefined): boolean {
+  const v = (value ?? "").trim();
+  if (!v) return true;
+  if (/^empty$/i.test(v)) return true;
+  return false;
+}
+
+function pickActivationCodeRow(list: CodeRow[], candidates: string[]): CodeRow | null {
+  if (list.length === 0) return null;
+  const matching = list.filter((r) => candidates.includes(r.code));
+  const pool = matching.length > 0 ? matching : list;
+  const free = pool.find((r) => redeemedByIsUnset(r.redeemed_by));
+  return free ?? pool[0] ?? null;
+}
+
+function sameDeviceRedemption(redeemedBy: string | null | undefined, deviceId: string): boolean {
+  if (redeemedByIsUnset(redeemedBy)) return false;
+  return (redeemedBy ?? "").trim() === deviceId.trim();
+}
+
+function otherDeviceRedemption(redeemedBy: string | null | undefined, deviceId: string): boolean {
+  if (redeemedByIsUnset(redeemedBy)) return false;
+  return (redeemedBy ?? "").trim() !== deviceId.trim();
+}
+
 function validDeviceId(s: string): boolean {
   if (!s || s.length < 8 || s.length > 128) return false;
   return /^[a-zA-Z0-9_.-]+$/.test(s);
@@ -82,21 +114,17 @@ Deno.serve(async (req) => {
     return json(origin, { success: false, error: "Could not verify this code. Try again." }, 500);
   }
 
-  const list = rows ?? [];
+  const list = (rows ?? []) as CodeRow[];
   if (list.length === 0) {
     return json(origin, { success: false, error: "Invalid activation code." });
   }
 
-  let codeRow = list[0]!;
-  for (const c of candidates) {
-    const hit = list.find((r) => r.code === c);
-    if (hit) {
-      codeRow = hit;
-      break;
-    }
+  const codeRow = pickActivationCodeRow(list, candidates);
+  if (!codeRow) {
+    return json(origin, { success: false, error: "Invalid activation code." });
   }
 
-  if (codeRow.redeemed_by && codeRow.redeemed_by !== deviceId) {
+  if (otherDeviceRedemption(codeRow.redeemed_by, deviceId)) {
     return json(origin, { success: false, error: "This code has already been used." });
   }
 
@@ -113,19 +141,24 @@ Deno.serve(async (req) => {
     return { deck: deck as DeckRow | null, err: null };
   }
 
-  if (codeRow.redeemed_by === deviceId) {
+  if (sameDeviceRedemption(codeRow.redeemed_by, deviceId)) {
     const { deck, err } = await loadDeck(codeRow.deck_id);
     if (err) return json(origin, { success: false, error: err }, 500);
     if (!deck) return json(origin, { success: false, error: "Deck not found." });
     return json(origin, { success: true, deck });
   }
 
+  /** §1 Cause C: deck must exist before we mark the code redeemed. */
+  const { deck: deckPre, err: deckErr } = await loadDeck(codeRow.deck_id);
+  if (deckErr) return json(origin, { success: false, error: deckErr }, 500);
+  if (!deckPre) return json(origin, { success: false, error: "Deck not found." });
+
   const now = new Date().toISOString();
   const { data: updated, error: upErr } = await admin
     .from("activation_codes")
     .update({ redeemed_by: deviceId, redeemed_at: now })
     .eq("id", codeRow.id)
-    .is("redeemed_by", null)
+    .or("redeemed_by.is.null,redeemed_by.eq.,redeemed_by.eq.EMPTY")
     .select("id")
     .maybeSingle();
 
@@ -138,9 +171,5 @@ Deno.serve(async (req) => {
     return json(origin, { success: false, error: "This code has already been used." });
   }
 
-  const { deck, err } = await loadDeck(codeRow.deck_id);
-  if (err) return json(origin, { success: false, error: err }, 500);
-  if (!deck) return json(origin, { success: false, error: "Deck not found." });
-
-  return json(origin, { success: true, deck });
+  return json(origin, { success: true, deck: deckPre });
 });

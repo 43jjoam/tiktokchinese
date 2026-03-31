@@ -24,3 +24,40 @@ export function sortWordsByCubeTier(
     return collator.compare(a.character, b.character)
   })
 }
+
+/** Bands for Library deck contents — same tiers as `MasteryCube` / grammar vault. */
+export type DeckCubeBands = {
+  mastered: WordMetadata[]
+  inProgress: WordMetadata[]
+  newWords: WordMetadata[]
+  /** New (ghost) first, in progress middle, mastered last; zh-Hans tie-break. */
+  flat: WordMetadata[]
+}
+
+/**
+ * Library deck cube order: ghost (new) → solid POS (in progress) → gold (mastered).
+ * Matches `GrammarColorsMontessoriPage` / `MasteryCube` ghost vs solid vs gold.
+ */
+export function bandDeckWordsByCubeTier(
+  words: WordMetadata[],
+  wordStates: Record<string, WordState | undefined>,
+): DeckCubeBands {
+  const mastered: WordMetadata[] = []
+  const inProgress: WordMetadata[] = []
+  const newWords: WordMetadata[] = []
+  const sortZh = (a: WordMetadata, b: WordMetadata) =>
+    a.character.localeCompare(b.character, 'zh-Hans-CN')
+  for (const w of words) {
+    const st = wordStates[w.word_id]
+    const mScore = st?.mScore ?? 0
+    const isMastered = Boolean(st?.masteryConfirmed) || mScore >= 5
+    if (isMastered) mastered.push(w)
+    else if (mScore === 0) newWords.push(w)
+    else inProgress.push(w)
+  }
+  mastered.sort(sortZh)
+  inProgress.sort(sortZh)
+  newWords.sort(sortZh)
+  const flat = [...newWords, ...inProgress, ...mastered]
+  return { mastered, inProgress, newWords, flat }
+}

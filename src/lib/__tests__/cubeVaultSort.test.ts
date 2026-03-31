@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cubeVaultSortTier, sortWordsByCubeTier } from '../cubeVaultSort'
+import { bandDeckWordsByCubeTier, cubeVaultSortTier, sortWordsByCubeTier } from '../cubeVaultSort'
 import type { WordMetadata, WordState } from '../types'
 
 function word(id: string, character: string): WordMetadata {
@@ -88,5 +88,45 @@ describe('sortWordsByCubeTier', () => {
     }
     const sorted = sortWordsByCubeTier(words, states)
     expect(sorted.map((x) => x.word_id)).toEqual(['m', 'p', 'n'])
+  })
+})
+
+describe('bandDeckWordsByCubeTier', () => {
+  it('orders new → in progress → mastered (inverse of profile vault sort)', () => {
+    const words = [word('n', '\u65b0'), word('m', '\u4e2d'), word('p', '\u4e00')]
+    const states: Record<string, WordState | undefined> = {
+      n: {
+        word_id: 'n',
+        mScore: 0,
+        masteryConfirmed: false,
+        consecutiveLoop1NoTapSessions: 0,
+        lastLoop1NoTapAt: null,
+        lastSeenAt: null,
+        sessionsSeen: 0,
+      },
+      m: {
+        word_id: 'm',
+        mScore: 6,
+        masteryConfirmed: false,
+        consecutiveLoop1NoTapSessions: 0,
+        lastLoop1NoTapAt: null,
+        lastSeenAt: null,
+        sessionsSeen: 2,
+      },
+      p: {
+        word_id: 'p',
+        mScore: 2,
+        masteryConfirmed: false,
+        consecutiveLoop1NoTapSessions: 0,
+        lastLoop1NoTapAt: null,
+        lastSeenAt: null,
+        sessionsSeen: 1,
+      },
+    }
+    const { flat, newWords, inProgress, mastered } = bandDeckWordsByCubeTier(words, states)
+    expect(newWords.map((x) => x.word_id)).toEqual(['n'])
+    expect(inProgress.map((x) => x.word_id)).toEqual(['p'])
+    expect(mastered.map((x) => x.word_id)).toEqual(['m'])
+    expect(flat.map((x) => x.word_id)).toEqual(['n', 'p', 'm'])
   })
 })

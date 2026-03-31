@@ -28,7 +28,11 @@ create policy "anon_update_redeem_activation_codes"
   on public.activation_codes
   for update
   to anon
-  using (redeemed_by is null)
+  using (
+    redeemed_by is null
+    or btrim(redeemed_by::text) = ''
+    or lower(btrim(redeemed_by::text)) = 'empty'
+  )
   with check (true);
 
 -- decks: read metadata for Library / activation success screen
@@ -53,7 +57,11 @@ create policy "authenticated_update_redeem_activation_codes"
   on public.activation_codes
   for update
   to authenticated
-  using (redeemed_by is null)
+  using (
+    redeemed_by is null
+    or btrim(redeemed_by::text) = ''
+    or lower(btrim(redeemed_by::text)) = 'empty'
+  )
   with check (true);
 
 drop policy if exists "authenticated_select_decks" on public.decks;

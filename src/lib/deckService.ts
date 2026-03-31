@@ -153,6 +153,43 @@ function activationCodeLookupValues(trimmed: string): string[] {
   ].filter((c) => c.length > 0)
 }
 
+type ActivationCodeRow = {
+  id: string
+  code: string
+  deck_id: string
+  redeemed_by: string | null
+}
+
+/**
+ * Not redeemed yet: SQL NULL, blank, or mistaken Table Editor placeholder (literal "EMPTY").
+ * Do not use the word EMPTY as a value — leave the cell NULL for unused codes.
+ */
+function redeemedByIsUnset(value: string | null | undefined): boolean {
+  const v = (value ?? '').trim()
+  if (!v) return true
+  if (/^empty$/i.test(v)) return true
+  return false
+}
+
+/** Prefer an unredeemed row when duplicate code strings exist (bad data). */
+function pickActivationCodeRow(list: ActivationCodeRow[], candidates: string[]): ActivationCodeRow | null {
+  if (list.length === 0) return null
+  const matching = list.filter((r) => candidates.includes(r.code))
+  const pool = matching.length > 0 ? matching : list
+  const free = pool.find((r) => redeemedByIsUnset(r.redeemed_by))
+  return free ?? pool[0] ?? null
+}
+
+function sameDeviceRedemption(redeemedBy: string | null | undefined, deviceId: string): boolean {
+  if (redeemedByIsUnset(redeemedBy)) return false
+  return (redeemedBy ?? '').trim() === deviceId.trim()
+}
+
+function otherDeviceRedemption(redeemedBy: string | null | undefined, deviceId: string): boolean {
+  if (redeemedByIsUnset(redeemedBy)) return false
+  return (redeemedBy ?? '').trim() !== deviceId.trim()
+}
+
 function formatActivateSupabaseError(
   step: 'look up' | 'save' | 'load deck',
   err: { message?: string; code?: string } | null | undefined,
@@ -205,23 +242,25 @@ async function activateCodeInner(
 
   if (fetchErr) return { success: false, error: formatActivateSupabaseError('look up', fetchErr) }
 
-  const list = rows ?? []
+  const list = (rows ?? []) as ActivationCodeRow[]
   if (list.length === 0) return { success: false, error: 'Invalid activation code.' }
 
-  let codeRow: (typeof list)[number] | null = null
-  for (const c of candidates) {
-    const hit = list.find((r) => r.code === c)
-    if (hit) {
-      codeRow = hit
-      break
-    }
-  }
-  if (!codeRow) codeRow = list[0]
+  const codeRow = pickActivationCodeRow(list, candidates)
+  if (!codeRow) return { success: false, error: 'Invalid activation code.' }
 
-  if (codeRow.redeemed_by && codeRow.redeemed_by !== deviceId) {
+  if (import.meta.env.DEV) {
+    console.debug('[activateCode]', {
+      inputSample: trimmed.slice(0, 12),
+      rowId: codeRow.id,
+      hasRedeemedBy: Boolean((codeRow.redeemed_by ?? '').trim()),
+    })
+  }
+
+  if (otherDeviceRedemption(codeRow.redeemed_by, deviceId)) {
     return { success: false, error: 'This code has already been used.' }
   }
-  if (codeRow.redeemed_by === deviceId) {
+
+  if (sameDeviceRedemption(codeRow.redeemed_by, deviceId)) {
     const { data: deck, error: deckErr } = await db
       .from('decks')
       .select('id, name, cover_image_url, shopify_url')
@@ -232,23 +271,30 @@ async function activateCodeInner(
     return { success: false, error: 'Deck not found.' }
   }
 
-  const { error: updateErr } = await db
-    .from('activation_codes')
-    .update({ redeemed_by: deviceId, redeemed_at: new Date().toISOString() })
-    .eq('id', codeRow.id)
-
-  if (updateErr) return { success: false, error: formatActivateSupabaseError('save', updateErr) }
-
-  const { data: deck, error: deckErr } = await db
+  /** Action plan §1 Cause C: confirm deck exists before consuming the code. */
+  const { data: deckPre, error: deckPreErr } = await db
     .from('decks')
     .select('id, name, cover_image_url, shopify_url')
     .eq('id', codeRow.deck_id)
     .maybeSingle()
 
-  if (deckErr) return { success: false, error: formatActivateSupabaseError('load deck', deckErr) }
-  if (!deck) return { success: false, error: 'Deck not found.' }
+  if (deckPreErr) return { success: false, error: formatActivateSupabaseError('load deck', deckPreErr) }
+  if (!deckPre) return { success: false, error: 'Deck not found.' }
 
-  const deckInfo = deck as DeckInfo
+  const { data: updated, error: updateErr } = await db
+    .from('activation_codes')
+    .update({ redeemed_by: deviceId, redeemed_at: new Date().toISOString() })
+    .eq('id', codeRow.id)
+    .or('redeemed_by.is.null,redeemed_by.eq.,redeemed_by.eq.EMPTY')
+    .select('id')
+    .maybeSingle()
+
+  if (updateErr) return { success: false, error: formatActivateSupabaseError('save', updateErr) }
+  if (!updated) {
+    return { success: false, error: 'This code has already been used.' }
+  }
+
+  const deckInfo = deckPre as DeckInfo
   persistActivatedDeckIfNeeded(deckInfo)
 
   return { success: true, deck: deckInfo }

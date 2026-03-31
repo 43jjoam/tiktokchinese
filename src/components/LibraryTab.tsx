@@ -1,7 +1,8 @@
 import { AnimatePresence } from 'framer-motion'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { getAuthEmail } from '../lib/accountSync'
 import { fetchPublicCatalogCoverUrls } from '../lib/catalogCovers'
-import { activateCode, getActivatedDecks, type DeckInfo } from '../lib/deckService'
+import { activateCode, getActivatedDecks, getSupabaseClient, type DeckInfo } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT } from '../lib/deckWords'
 import DeckCatalogGrid from './DeckCatalogGrid'
 import DeckContentsPanel from './DeckContentsPanel'
@@ -13,6 +14,7 @@ export default function LibraryTab() {
   const [decks, setDecks] = useState<DeckInfo[]>([])
   const [openDeck, setOpenDeck] = useState<DeckInfo | null>(null)
   const [catalogCoverByKey, setCatalogCoverByKey] = useState<Record<string, string>>({})
+  const [authEmail, setAuthEmail] = useState<string | null>(null)
   const activatePendingRef = useRef(0)
 
   useEffect(() => {
@@ -38,6 +40,21 @@ export default function LibraryTab() {
       cancelled = true
       window.removeEventListener(ACTIVATED_DECKS_CHANGED_EVENT, sync)
     }
+  }, [])
+
+  useEffect(() => {
+    const client = getSupabaseClient()
+    if (!client) {
+      setAuthEmail(null)
+      return
+    }
+    void getAuthEmail().then(setAuthEmail)
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange((_event, session) => {
+      setAuthEmail(session?.user?.email ?? null)
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   const handleActivate = useCallback(async () => {
@@ -71,7 +88,12 @@ export default function LibraryTab() {
     <div className="relative z-10 h-dvh overflow-y-auto bg-black pb-20 pt-4 px-5">
       <AnimatePresence>
         {openDeck && (
-          <DeckContentsPanel key={openDeck.id} deck={openDeck} onBack={() => setOpenDeck(null)} />
+          <DeckContentsPanel
+            key={openDeck.id}
+            deck={openDeck}
+            onBack={() => setOpenDeck(null)}
+            isSignedIn={Boolean(authEmail)}
+          />
         )}
       </AnimatePresence>
 
