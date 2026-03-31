@@ -693,7 +693,7 @@ export default function ProfileTab() {
           <button
             type="button"
             onClick={() => void handleProfileInvite()}
-            className="w-full max-w-[16rem] rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-900/40 transition-colors hover:bg-sky-500 active:scale-[0.98] active:bg-sky-700"
+            className="w-full max-w-[16rem] rounded-2xl bg-black py-2.5 text-sm font-semibold text-white ring-1 ring-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.45)] transition-all hover:bg-zinc-900 active:scale-[0.98] active:opacity-90"
           >
             {profileInviteCopied ? 'Link copied!' : 'Invite a friend'}
           </button>

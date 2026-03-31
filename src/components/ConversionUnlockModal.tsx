@@ -136,7 +136,7 @@ export function ConversionUnlockModal({
                   <button
                     type="button"
                     onClick={openShop}
-                    className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
+                    className="mt-4 w-full rounded-2xl bg-amber-500 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(245,158,11,0.3)] transition-all hover:bg-amber-400 active:scale-[0.98] active:opacity-90"
                   >
                     Buy now \u00b7 AUD $4.99
                   </button>
@@ -162,7 +162,7 @@ export function ConversionUnlockModal({
                     <button
                       type="button"
                       onClick={() => void copyInvite()}
-                      className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
+                      className="mt-4 w-full rounded-2xl bg-black py-3 text-sm font-semibold text-white ring-1 ring-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.45)] transition-all hover:bg-zinc-900 active:scale-[0.98] active:opacity-90"
                     >
                       {inviteCopied ? 'Link copied!' : 'Copy my invite link'}
                     </button>
@@ -194,7 +194,7 @@ export function ConversionUnlockModal({
                     <button
                       type="button"
                       onClick={onRemindTomorrow}
-                      className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
+                      className="mt-4 w-full rounded-2xl bg-black py-3 text-sm font-semibold text-white ring-1 ring-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.45)] transition-all hover:bg-zinc-900 active:scale-[0.98] active:opacity-90"
                     >
                       Remind me tomorrow
                     </button>

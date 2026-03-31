@@ -117,7 +117,7 @@ export default function LibraryTab() {
             type="button"
             onClick={handleActivate}
             disabled={activating}
-            className="shrink-0 rounded-lg bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-indigo-900/40 transition-colors hover:bg-indigo-500 active:scale-[0.98] active:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
+            className="shrink-0 rounded-2xl bg-black px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/15 shadow-[0_4px_20px_rgba(0,0,0,0.45)] transition-all hover:bg-zinc-900 active:scale-[0.98] active:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
           >
             {activating ? '…' : 'Activate'}
           </button>

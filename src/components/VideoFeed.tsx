@@ -2156,7 +2156,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
             setSaveProgressForceLinkSent(false)
             setSaveProgressOpen(true)
           }}
-          className="pointer-events-auto fixed right-[calc(env(safe-area-inset-right)+1rem)] top-[calc(env(safe-area-inset-top)+1rem)] z-[58] rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,0,0,0.45)] ring-1 ring-white/15 active:scale-[0.98] active:opacity-95"
+          className="pointer-events-auto fixed right-[calc(env(safe-area-inset-right)+1rem)] top-[calc(env(safe-area-inset-top)+1rem)] z-[58] rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(0,0,0,0.45)] ring-1 ring-white/15 transition-all hover:bg-zinc-900 active:scale-[0.98] active:opacity-90"
         >
           Sign in
         </button>
