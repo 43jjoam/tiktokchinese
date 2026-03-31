@@ -732,25 +732,13 @@ export default function ProfileTab() {
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
-                {authChecked && supabaseConfigured ? (
-                  authEmail ? (
-                    <div className="mb-4 mt-1 rounded-2xl border border-emerald-500/35 bg-emerald-950/45 px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-200/85">
-                        Sync your progress
-                      </p>
-                      <p className="mt-2 text-sm leading-relaxed text-white/78">
-                        Your learning saves to this account while you&apos;re signed in. Open the app on another device
-                        with the same email and your stats and Library will merge automatically.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="mb-4 mt-1 rounded-2xl border border-white/12 bg-white/[0.05] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Cloud backup</p>
-                      <p className="mt-2 text-sm leading-relaxed text-white/72">
-                        Sign in from the Home tab to sync progress across devices and keep your Library in step.
-                      </p>
-                    </div>
-                  )
+                {authChecked && supabaseConfigured && !authEmail ? (
+                  <div className="mb-4 mt-1 rounded-2xl border border-white/12 bg-white/[0.05] px-4 py-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-white/50">Cloud backup</p>
+                    <p className="mt-2 text-sm leading-relaxed text-white/72">
+                      Sign in from the Home tab to sync progress across devices and keep your Library in step.
+                    </p>
+                  </div>
                 ) : null}
 
                 <button

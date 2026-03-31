@@ -27,6 +27,7 @@ describe('applyStreakForFirstWatchOfDay', () => {
     expect(day2.lastActiveDate).toBe('2026-03-30')
     expect(day2.currentStreak).toBe(2)
     expect(day2.totalDaysActive).toBe(2)
+    expect(day2.streakBonusCards).toBe(10)
   })
 
   it('gap resets streak to 1 but still increments total days', () => {

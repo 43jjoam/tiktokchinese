@@ -32,6 +32,15 @@ export type AppMeta = {
    * Post-auth conversion modal: show only when `Date.now() >= this` (e.g. after “Remind tomorrow” or soft dismiss).
    */
   conversionUnlockEligibleAfter?: number
+  /**
+   * After “Remind tomorrow”: feed stays locked until this timestamp (next local day start).
+   * Cleared when the day rolls or time passes.
+   */
+  conversionFeedLockedUntil?: number
+  /**
+   * Client-side +10 per calendar return day (max 30) toward free CC1 cap; not a DB column.
+   */
+  streakBonusCards?: number
   /** ISO timestamp from `user_learning_profiles.updated_at` after last merge or upload */
   lastMergedRemoteUpdatedAt?: string | null
   /** Supabase `user.id` that `lastMergedRemoteUpdatedAt` refers to — avoids skipping merge for the wrong account */
@@ -46,6 +55,8 @@ export type AppMeta = {
   /** Referrer `auth.users.id`; mirrors `referred_by` */
   referredByUserId?: string | null
   referralCount?: number
+  /** Mirrors `user_learning_profiles.referral_bonus_applied` after server awards referral bonus. */
+  referralBonusApplied?: boolean
 }
 
 export type PersistedState = {
@@ -68,6 +79,8 @@ export const DEFAULT_STUDY_META: AppMeta = {
   referralCode: null,
   referredByUserId: null,
   referralCount: 0,
+  referralBonusApplied: false,
+  streakBonusCards: 0,
 }
 
 const defaultMeta = DEFAULT_STUDY_META

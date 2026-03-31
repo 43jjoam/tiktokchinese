@@ -64,6 +64,58 @@ export function captureReferralFromUrl(): void {
   }
 }
 
+function persistReferredByUserId(referrerId: string, userId: string): boolean {
+  if (referrerId === userId) {
+    clearPendingReferralCode()
+    return false
+  }
+
+  const next = loadPersistedState()
+  if (next.meta.referredByUserId?.trim()) {
+    clearPendingReferralCode()
+    return false
+  }
+
+  savePersistedState({
+    ...next,
+    meta: {
+      ...next.meta,
+      referredByUserId: referrerId,
+    },
+  })
+  clearPendingReferralCode()
+  try {
+    window.dispatchEvent(new CustomEvent(PERSISTED_STATE_REPLACED_EVENT))
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+
+async function fetchReferrerIdForCode(code: string): Promise<
+  { ok: true; referrerId: string } | { ok: false; reason: 'rpc' | 'not_found' }
+> {
+  const supabase = getSupabaseClient()
+  if (!supabase) return { ok: false, reason: 'rpc' }
+
+  const { data: referrerId, error } = await supabase.rpc('user_id_for_referral_code', {
+    code,
+  })
+
+  if (error) {
+    if (import.meta.env.DEV) {
+      console.warn('[referral] user_id_for_referral_code failed:', error.message)
+    }
+    return { ok: false, reason: 'rpc' }
+  }
+
+  if (!referrerId || typeof referrerId !== 'string') {
+    return { ok: false, reason: 'not_found' }
+  }
+
+  return { ok: true, referrerId }
+}
+
 /**
  * Resolve pending `?ref=` via `user_id_for_referral_code` RPC and set `meta.referredByUserId`.
  * Returns true if local state was updated — caller should run `uploadLearningProfileWithLocalMeta()`.
@@ -87,40 +139,63 @@ export async function applyPendingReferralAttribution(userId: string): Promise<b
   } = await supabase.auth.getSession()
   if (!session?.user?.id || session.user.id !== userId) return false
 
-  const { data: referrerId, error } = await supabase.rpc('user_id_for_referral_code', {
-    code: pending,
-  })
+  const resolved = await fetchReferrerIdForCode(pending)
+  if (!resolved.ok) {
+    if (resolved.reason === 'not_found') clearPendingReferralCode()
+    return false
+  }
 
-  if (error) {
-    if (import.meta.env.DEV) {
-      console.warn('[referral] user_id_for_referral_code failed:', error.message)
+  return persistReferredByUserId(resolved.referrerId, userId)
+}
+
+export type ApplyManualReferralResult =
+  | { ok: true }
+  | { ok: false; message: string }
+
+/**
+ * Library / manual entry: resolve an 8-character invite code and attribute this account to the referrer.
+ * Call only when signed in. On success, caller should run `uploadLearningProfileWithLocalMeta()`.
+ */
+export async function applyReferralCodeFromManualEntry(
+  rawInput: string,
+  userId: string,
+): Promise<ApplyManualReferralResult> {
+  const supabase = getSupabaseClient()
+  if (!supabase) {
+    return { ok: false, message: 'Cloud is not available.' }
+  }
+
+  const normalized = normalizeReferralCodeParam(rawInput)
+  if (!normalized) {
+    return {
+      ok: false,
+      message: 'Use an 8-character code (letters A–Z and digits, no 0/O or 1/I).',
     }
-    return false
   }
 
-  if (!referrerId || typeof referrerId !== 'string') {
-    clearPendingReferralCode()
-    return false
+  const prev = loadPersistedState()
+  if (prev.meta.referredByUserId?.trim()) {
+    return { ok: false, message: 'You already connected an invite from a friend.' }
   }
 
-  if (referrerId === userId) {
-    clearPendingReferralCode()
-    return false
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.user?.id || session.user.id !== userId) {
+    return { ok: false, message: 'Sign in to use a friend invite code.' }
   }
 
-  const next = loadPersistedState()
-  savePersistedState({
-    ...next,
-    meta: {
-      ...next.meta,
-      referredByUserId: referrerId,
-    },
-  })
-  clearPendingReferralCode()
-  try {
-    window.dispatchEvent(new CustomEvent(PERSISTED_STATE_REPLACED_EVENT))
-  } catch {
-    /* ignore */
+  const resolved = await fetchReferrerIdForCode(normalized)
+  if (!resolved.ok) {
+    if (resolved.reason === 'rpc') {
+      return { ok: false, message: 'Could not look up that code. Try again in a moment.' }
+    }
+    return { ok: false, message: 'No account matches that code. Check for typos.' }
   }
-  return true
+
+  if (!persistReferredByUserId(resolved.referrerId, userId)) {
+    return { ok: false, message: 'You cannot use your own invite code.' }
+  }
+
+  return { ok: true }
 }

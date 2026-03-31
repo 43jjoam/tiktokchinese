@@ -1,5 +1,8 @@
 import type { AppMeta } from './storage'
 
+/** Matches journey doc streak pool (+10/day, max +30 from streak). */
+const STREAK_BONUS_CARDS_MAX = 30
+
 /** UTC calendar day `YYYY-MM-DD` (matches `user_learning_profiles.last_active_date`). */
 export function utcCalendarDayIso(nowMs: number = Date.now()): string {
   return new Date(nowMs).toISOString().slice(0, 10)
@@ -49,10 +52,22 @@ export function applyStreakForFirstWatchOfDay(meta: AppMeta, nowMs: number = Dat
     nextStreak = 1
   }
 
+  let streakBonusCards = Math.max(0, Math.floor(meta.streakBonusCards ?? 0))
+  if (last !== null) {
+    streakBonusCards = Math.min(STREAK_BONUS_CARDS_MAX, streakBonusCards + 10)
+  }
+
+  let conversionFeedLockedUntil = meta.conversionFeedLockedUntil
+  if (conversionFeedLockedUntil != null && nowMs >= conversionFeedLockedUntil) {
+    conversionFeedLockedUntil = undefined
+  }
+
   return {
     ...meta,
     lastActiveDate: today,
     currentStreak: nextStreak,
     totalDaysActive: totalPrev + 1,
+    streakBonusCards,
+    conversionFeedLockedUntil,
   }
 }

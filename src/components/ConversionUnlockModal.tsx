@@ -2,28 +2,42 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback } from 'react'
 import {
   CONVERSION_HSK1_TOTAL_VIDEOS_CHARS,
-  CONVERSION_UNIQUE_CC1_THRESHOLD,
   getCc1PoolSize,
   getHsk1ShopUrl,
 } from '../lib/conversionUnlock'
 
 type Props = {
   open: boolean
+  /** 20 cold user, 30 if this account was referred — drives headline “X characters”. */
+  gateThreshold: number
+  /** At unique CC1 cap (50): only Buy + Invite; no “tomorrow”. */
+  hardPaywallOnly?: boolean
+  /** At 66 cards: Buy only — no Invite, no Tomorrow. */
+  finalGateOnly?: boolean
+  /** Copy tweak for invitee (referred_by set). */
+  referredInvitee?: boolean
   /** Invite URL (e.g. `origin/?ref=CODE`); if empty, copy still uses origin. */
   inviteUrl: string
+  /** Your 8-character referral code for friends who type it in Library. */
+  inviteCode: string | null
   onBuyNow: () => void
   onCopyInvite: () => void
+  onCopyInviteCode: () => void
   onRemindTomorrow: () => void
-  onDismissSoft: () => void
 }
 
 export function ConversionUnlockModal({
   open,
+  gateThreshold,
+  hardPaywallOnly = false,
+  finalGateOnly = false,
+  referredInvitee = false,
   inviteUrl,
+  inviteCode,
   onBuyNow,
   onCopyInvite,
+  onCopyInviteCode,
   onRemindTomorrow,
-  onDismissSoft,
 }: Props) {
   const pool = getCc1PoolSize()
   const shopUrl = getHsk1ShopUrl()
@@ -50,6 +64,29 @@ export function ConversionUnlockModal({
     onCopyInvite()
   }, [inviteUrl, onCopyInvite])
 
+  const copyCodeOnly = useCallback(async () => {
+    const code = inviteCode?.trim()
+    if (!code) return
+    try {
+      await navigator.clipboard.writeText(code)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = code
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        /* ignore */
+      }
+    }
+    onCopyInviteCode()
+  }, [inviteCode, onCopyInviteCode])
+
   const openShop = useCallback(() => {
     window.open(shopUrl, '_blank', 'noopener,noreferrer')
     onBuyNow()
@@ -66,14 +103,9 @@ export function ConversionUnlockModal({
           exit={{ opacity: 0 }}
           transition={{ duration: 0.2 }}
         >
-          <motion.button
-            type="button"
-            aria-label="Close"
+          <div
+            aria-hidden
             className="absolute inset-0 bg-black/75"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onDismissSoft}
           />
           <motion.div
             role="dialog"
@@ -91,9 +123,27 @@ export function ConversionUnlockModal({
                 id="conversion-unlock-title"
                 className="text-center text-lg font-bold leading-snug text-white sm:text-xl"
               >
-                You&apos;ve learned {CONVERSION_UNIQUE_CC1_THRESHOLD} characters out of {pool}. Keep going — choose how:
+                {finalGateOnly ? (
+                  <>
+                    You&apos;ve used all your free Character 1 videos ({pool} in the full deck).
+                  </>
+                ) : hardPaywallOnly ? (
+                  <>
+                    You&apos;ve reached your free Character 1 limit ({pool} videos in the full deck).
+                  </>
+                ) : (
+                  <>
+                    You&apos;ve learned {gateThreshold} characters out of {pool}. Keep going — choose how:
+                  </>
+                )}
               </h2>
-              <p className="mt-2 text-center text-sm text-white/50">Pick what feels right. No pressure.</p>
+              <p className="mt-2 text-center text-sm text-white/50">
+                {finalGateOnly
+                  ? "Buy the bundle to keep learning — that's the one remaining path."
+                  : hardPaywallOnly
+                  ? "Buy the bundle or invite a friend — that's how you keep learning past this point."
+                  : "Pick what feels right. No pressure."}
+              </p>
 
               <div className="mt-6 flex flex-col gap-3">
                 {/* Paid — recommended */}
@@ -125,76 +175,80 @@ export function ConversionUnlockModal({
                   </button>
                 </div>
 
-                {/* Invite */}
-                <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-950/35 to-zinc-950/80 p-4">
-                  <div className="flex gap-3">
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-700/70 text-lg"
-                      aria-hidden
+                {/* Invite — hidden at final gate */}
+                {/* Invite — hidden at final gate */}
+                {!finalGateOnly ? (
+                  <div className="rounded-2xl border border-sky-500/30 bg-gradient-to-br from-sky-950/35 to-zinc-950/80 p-4">
+                    <div className="flex gap-3">
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-700/70 text-lg"
+                        aria-hidden
+                      >
+                        🔗
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-bold text-white">Invite a friend</h3>
+                        <p className="mt-1 text-sm leading-snug text-white/60">
+                          {referredInvitee
+                            ? 'Invite someone — you unlock 20 more cards; they get 10 when they join.'
+                            : 'Share your link or code. When your friend signs up, you get 20 more cards and they get 10 — free.'}
+                        </p>
+                      </div>
+                    </div>
+                    {inviteCode?.trim() ? (
+                      <div className="mt-3 rounded-xl border border-white/10 bg-black/35 px-3 py-2.5 text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-white/45">Your invite code</p>
+                        <p className="mt-1 font-mono text-lg font-bold tracking-[0.2em] text-sky-100">
+                          {inviteCode.trim().toUpperCase()}
+                        </p>
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void copyInvite()}
+                      className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
                     >
-                      🔗
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-white">Invite a friend</h3>
-                      <p className="mt-1 text-sm leading-snug text-white/60">
-                        Share your link. When your friend signs up, you both unlock more — free.
-                      </p>
-                    </div>
+                      Copy my invite link
+                    </button>
+                    {inviteCode?.trim() ? (
+                      <button
+                        type="button"
+                        onClick={() => void copyCodeOnly()}
+                        className="mt-2 w-full rounded-xl border border-white/15 bg-white/[0.06] py-3 text-sm font-bold text-white/90 transition-colors hover:bg-white/[0.09] active:opacity-95"
+                      >
+                        Copy invite code only
+                      </button>
+                    ) : null}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void copyInvite()}
-                    className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
-                  >
-                    Copy my invite link
-                  </button>
-                </div>
+                ) : null}
 
-                {/* Tomorrow */}
-                <div className="rounded-2xl border border-emerald-500/28 bg-gradient-to-br from-emerald-950/35 to-zinc-950/80 p-4">
-                  <div className="flex gap-3">
-                    <div
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-800/70 text-lg"
-                      aria-hidden
+                {/* Come back tomorrow — soft gate only */}
+                {!hardPaywallOnly && !finalGateOnly ? (
+                  <div className="rounded-2xl border border-emerald-500/28 bg-gradient-to-br from-emerald-950/35 to-zinc-950/80 p-4">
+                    <div className="flex gap-3">
+                      <div
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-800/70 text-lg"
+                        aria-hidden
+                      >
+                        🕐
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-bold text-white">Come back tomorrow</h3>
+                        <p className="mt-1 text-sm leading-snug text-white/60">
+                          Your streak continues. The feed stays paused until tomorrow — then +10 more cards unlock.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onRemindTomorrow}
+                      className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
                     >
-                      🕐
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-bold text-white">Come back tomorrow</h3>
-                      <p className="mt-1 text-sm leading-snug text-white/60">
-                        Your streak continues. We&apos;ll welcome you back when you return.
-                      </p>
-                    </div>
+                      Remind me tomorrow
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={onRemindTomorrow}
-                    className="mt-4 w-full rounded-xl bg-black py-3.5 text-sm font-bold text-white transition-opacity hover:opacity-95 active:opacity-90"
-                  >
-                    Remind me tomorrow
-                  </button>
-                </div>
+                ) : null}
               </div>
-            </div>
-
-            <div className="flex justify-center border-t border-white/10 py-3">
-              <button
-                type="button"
-                aria-label="Dismiss"
-                onClick={onDismissSoft}
-                className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] text-white/70 transition-colors hover:border-white/25 hover:bg-white/[0.07] hover:text-white"
-              >
-                <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden className="translate-y-px">
-                  <path
-                    d="M6 9l6 6 6-6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
             </div>
           </motion.div>
         </motion.div>

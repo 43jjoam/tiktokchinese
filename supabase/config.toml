@@ -446,6 +446,17 @@ enabled = true
 # Library redeem: CORS + service role inside the function (no browser RLS / auth client quirks).
 verify_jwt = false
 entrypoint = "./functions/redeem-activation/index.ts"
+
+# Cron calls with a shared secret in Authorization — not a Supabase user JWT (see shopify-webhook).
+[functions.send-streak-reminders]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/send-streak-reminders/index.ts"
+
+[functions.notify-referrer-join]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/notify-referrer-join/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/shopify-webhook/*.html" ]

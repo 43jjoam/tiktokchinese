@@ -1,4 +1,6 @@
+import { tryShowReferralJoinToast } from './referralJoinToast'
 import { applyPendingReferralAttribution } from './referralLanding'
+import { tryNotifyReferrerJoinEmail } from './notifyReferrerJoin'
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
 import { isRetryableSupabaseFailure, sleep } from './cloudRetries'
 import { getDeviceHashForEngagement } from './deviceHash'
@@ -229,11 +231,14 @@ function applyProfilePayload(p: StoredLearningProfilePayload): void {
 /** DB columns win over JSON `meta` for stats + referral (see `user_learning_profiles` migrations). */
 function applyRemoteProfileDbColumnsToLocal(stats: RemoteProfileStats, referral: RemoteReferralFields): void {
   const prev = loadPersistedState()
+  const prevReferralCount = prev.meta.referralCount ?? 0
   const remoteCode = referral.referralCode?.trim()
   const localCode = prev.meta.referralCode?.trim()
   /** Server null must not wipe a locally generated code before it has been upserted. */
   const mergedReferralCode = remoteCode || localCode || null
   const mergedReferredBy = referral.referredByUserId ?? prev.meta.referredByUserId ?? null
+  const mergedReferredBonus =
+    referral.referralBonusApplied === true || prev.meta.referralBonusApplied === true
   savePersistedState({
     ...prev,
     meta: {
@@ -245,9 +250,13 @@ function applyRemoteProfileDbColumnsToLocal(stats: RemoteProfileStats, referral:
       referralCode: mergedReferralCode ? mergedReferralCode.toUpperCase() : null,
       referredByUserId: mergedReferredBy,
       referralCount: referral.referralCount,
+      referralBonusApplied: mergedReferredBonus,
+      streakBonusCards: prev.meta.streakBonusCards ?? 0,
+      conversionFeedLockedUntil: prev.meta.conversionFeedLockedUntil,
     },
   })
   notifyPersistedStateReplaced()
+  tryShowReferralJoinToast(prevReferralCount, referral.referralCount)
 }
 
 function ensureReferralCodeBeforeUpload(): void {
@@ -627,6 +636,8 @@ async function finalizeCloudProfileSync(
     const refUp = await uploadLearningProfileWithLocalMeta()
     if (!refUp.ok) {
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
+    } else {
+      void tryNotifyReferrerJoinEmail()
     }
   }
 
@@ -794,7 +805,7 @@ export async function fetchRemoteLearningProfile(): Promise<
     const { data, error } = await supabase
       .from('user_learning_profiles')
       .select(
-        'payload, updated_at, last_active_date, current_streak, total_days_active, bonus_cards_unlocked, referral_code, referred_by, referral_count',
+        'payload, updated_at, last_active_date, current_streak, total_days_active, bonus_cards_unlocked, referral_code, referred_by, referral_count, referral_bonus_applied',
       )
       .eq('user_id', uid)
       .maybeSingle()

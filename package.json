@@ -19,6 +19,8 @@
     "words:tag-pos-openai": "tsx scripts/tag-pos-openai.ts",
     "words:check-pos-tags": "vitest run src/lib/__tests__/posTagResolution.test.ts",
     "configure:supabase-auth-smtp": "node scripts/configure-supabase-auth-smtp-resend.mjs",
+    "deploy:send-streak-reminders": "supabase functions deploy send-streak-reminders",
+    "deploy:notify-referrer-join": "supabase functions deploy notify-referrer-join",
     "test": "vitest run",
     "test:watch": "vitest",
     "demo:solid-video": "playwright test --config=e2e/playwright.solid-video.config.ts && node scripts/print-latest-playwright-video.mjs",

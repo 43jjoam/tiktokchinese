@@ -5,18 +5,22 @@ export type RemoteReferralFields = {
   referralCode: string | null
   referredByUserId: string | null
   referralCount: number
+  /** Server: true after referral bonus trigger awarded +10 cards (invitee row). */
+  referralBonusApplied: boolean
 }
 
 export const DEFAULT_REMOTE_REFERRAL_FIELDS: RemoteReferralFields = {
   referralCode: null,
   referredByUserId: null,
   referralCount: 0,
+  referralBonusApplied: false,
 }
 
 type ReferralRow = {
   referral_code?: string | null
   referred_by?: string | null
   referral_count?: number | null
+  referral_bonus_applied?: boolean | null
 }
 
 const UUID_RE =
@@ -30,6 +34,7 @@ export function remoteReferralFromDbRow(row: ReferralRow | null | undefined): Re
     referralCode: typeof code === 'string' && code.trim().length > 0 ? code.trim().toUpperCase() : null,
     referredByUserId: typeof ref === 'string' && UUID_RE.test(ref) ? ref : null,
     referralCount: Math.max(0, Math.floor(Number(row.referral_count ?? 0)) || 0),
+    referralBonusApplied: row.referral_bonus_applied === true,
   }
 }
 

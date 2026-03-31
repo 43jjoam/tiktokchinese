@@ -17,6 +17,8 @@ import {
   shouldBlockUnsignedSwipeAfterCap,
 } from '../lib/studySessionSwipeFinish'
 import { applyStreakForFirstWatchOfDay } from '../lib/streak'
+import { scheduleStreakReminderEmail, STREAK_REMINDER_DELAY_HOURS } from '../lib/streakReminder'
+import { tryLogUserReturnedAfterReminder } from '../lib/streakReminderReturn'
 import {
   loadCurrentWordId,
   loadPersistedState,
@@ -72,13 +74,21 @@ import {
   uploadLearningProfileWithLocalMeta,
   userFacingProfileUploadError,
 } from '../lib/accountSync'
+import { APP_EVENT, logAppEvent } from '../lib/appEvents'
+import { tryNotifyReferrerJoinEmail } from '../lib/notifyReferrerJoin'
 import { applyPendingReferralAttribution, captureReferralFromUrl } from '../lib/referralLanding'
+import {
+  REFERRAL_JOIN_TOAST_EVENT,
+  REFERRAL_JOIN_TOAST_MESSAGE,
+} from '../lib/referralJoinToast'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
 import {
-  CONVERSION_UNIQUE_CC1_THRESHOLD,
   countUniqueCc1VideosSeen,
   getCc1WordIds,
+  getConversionUniqueCc1Threshold,
+  getHardCapUniqueCc1,
   hasActivatedHsk1,
+  isFinalGateUniqueCc1,
   startOfNextLocalDayMs,
 } from '../lib/conversionUnlock'
 import { ConversionUnlockModal } from './ConversionUnlockModal'
@@ -811,6 +821,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const [words, setWords] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
   const [activatedDecks, setActivatedDecks] = useState<DeckInfo[]>([])
   const [activatedDecksKnown, setActivatedDecksKnown] = useState(false)
+  const activatedDecksRef = useRef(activatedDecks)
+  activatedDecksRef.current = activatedDecks
   /** Keeps a shared / gifted word in the feed after `buildHomeFeedWords` refreshes (e.g. not in CC1 until Library activated). */
   const deepLinkWordIdRef = useRef<string | null>(null)
 
@@ -879,6 +891,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   /** When true, modal opens on the “link sent” step (guest hit swipe cap with link already sent). */
   const [saveProgressForceLinkSent, setSaveProgressForceLinkSent] = useState(false)
   const [cloudSavedToast, setCloudSavedToast] = useState(false)
+  const [referralJoinToast, setReferralJoinToast] = useState(false)
   /** Shown when sign-in sync did not produce cloud profile data (or upload failed). */
   const [cloudBackupHint, setCloudBackupHint] = useState<string | null>(null)
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
@@ -895,6 +908,30 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const uniqueCc1Seen = useMemo(
     () => countUniqueCc1VideosSeen(wordStates, cc1WordIds),
     [wordStates, cc1WordIds],
+  )
+
+  const cc1GateThreshold = useMemo(
+    () => getConversionUniqueCc1Threshold(meta),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [meta.referredByUserId, meta.bonusCardsUnlocked, meta.streakBonusCards],
+  )
+  const hardCapUniqueCc1 = useMemo(() => getHardCapUniqueCc1(meta), [meta.referralCount])
+  const conversionFinalGate = useMemo(
+    () =>
+      Boolean(signedInUserId) &&
+      activatedDecksKnown &&
+      !hasActivatedHsk1(activatedDecks) &&
+      isFinalGateUniqueCc1(uniqueCc1Seen),
+    [signedInUserId, activatedDecksKnown, activatedDecks, uniqueCc1Seen],
+  )
+  const conversionHardPaywall = useMemo(
+    () =>
+      Boolean(signedInUserId) &&
+      activatedDecksKnown &&
+      !hasActivatedHsk1(activatedDecks) &&
+      !isFinalGateUniqueCc1(uniqueCc1Seen) &&
+      uniqueCc1Seen >= hardCapUniqueCc1,
+    [signedInUserId, activatedDecksKnown, activatedDecks, uniqueCc1Seen, hardCapUniqueCc1],
   )
 
   const [conversionEligiblePoll, setConversionEligiblePoll] = useState(0)
@@ -968,9 +1005,23 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       const attributed = await applyPendingReferralAttribution(signedInUserId)
       if (!attributed) return
       const up = await uploadLearningProfileWithLocalMeta()
-      if (up.ok) setProfileUploadDoneUserId(signedInUserId)
+      if (up.ok) {
+        setProfileUploadDoneUserId(signedInUserId)
+        void tryNotifyReferrerJoinEmail()
+      }
     })()
   }, [signedInUserId])
+
+  useEffect(() => {
+    if (!signedInUserId) return
+    void tryLogUserReturnedAfterReminder()
+  }, [signedInUserId])
+
+  useEffect(() => {
+    if (!conversionUnlockOpen) return
+    const value = conversionFinalGate ? 'final' : conversionHardPaywall ? 'hard' : 'soft'
+    logAppEvent(APP_EVENT.UNLOCK_SCREEN_SHOWN, { value })
+  }, [conversionUnlockOpen, conversionFinalGate, conversionHardPaywall])
 
   useEffect(() => {
     const client = getSupabaseClient()
@@ -1134,6 +1185,15 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     }
     window.addEventListener(PERSISTED_STATE_REPLACED_EVENT, onReplace)
     return () => window.removeEventListener(PERSISTED_STATE_REPLACED_EVENT, onReplace)
+  }, [])
+
+  useEffect(() => {
+    const onReferralJoin = () => {
+      setReferralJoinToast(true)
+      window.setTimeout(() => setReferralJoinToast(false), 4500)
+    }
+    window.addEventListener(REFERRAL_JOIN_TOAST_EVENT, onReferralJoin)
+    return () => window.removeEventListener(REFERRAL_JOIN_TOAST_EVENT, onReferralJoin)
   }, [])
 
   useEffect(() => {
@@ -1404,18 +1464,19 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     setSaveProgressForceLinkSent(false)
   }, [])
 
-  const dismissConversionSoft = useCallback(() => {
+  const onConversionCopyInvite = useCallback(() => {
+    logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'invite' })
+    logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'link' })
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
       ...p,
-      meta: {
-        ...p.meta,
-        conversionUnlockEligibleAfter: startOfNextLocalDayMs(),
-      },
+      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now() },
     }))
   }, [])
 
-  const onConversionCopyInvite = useCallback(() => {
+  const onConversionCopyInviteCode = useCallback(() => {
+    logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'invite' })
+    logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'code' })
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
       ...p,
@@ -1424,6 +1485,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [])
 
   const onConversionBuy = useCallback(() => {
+    logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'buy' })
+    logAppEvent(APP_EVENT.BUY_BUTTON_TAPPED)
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
       ...p,
@@ -1432,15 +1495,22 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [])
 
   const onConversionRemindTomorrow = useCallback(() => {
+    logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'tomorrow' })
+    logAppEvent(APP_EVENT.TOMORROW_SELECTED, {
+      streak: Math.max(0, Math.floor(Number(meta.currentStreak ?? 0))),
+    })
+    const next = startOfNextLocalDayMs()
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
       ...p,
       meta: {
         ...p.meta,
-        conversionUnlockEligibleAfter: startOfNextLocalDayMs(),
+        conversionUnlockEligibleAfter: next,
+        conversionFeedLockedUntil: next,
       },
     }))
-  }, [])
+    void scheduleStreakReminderEmail(STREAK_REMINDER_DELAY_HOURS)
+  }, [meta.currentStreak])
 
   useEffect(() => {
     if (!signedInUserId || !activatedDecksKnown) {
@@ -1451,10 +1521,29 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       setConversionUnlockOpen(false)
       return
     }
-    if (uniqueCc1Seen < CONVERSION_UNIQUE_CC1_THRESHOLD) {
+
+    // Final gate (66 cards): Buy only — always show, no dismiss path
+    if (isFinalGateUniqueCc1(uniqueCc1Seen)) {
+      if (saveProgressOpen) return
+      setConversionUnlockOpen(true)
+      return
+    }
+
+    const maxCap = getHardCapUniqueCc1(meta)
+    const atHard = uniqueCc1Seen >= maxCap
+
+    if (atHard) {
+      if (saveProgressOpen) return
+      setConversionUnlockOpen(true)
+      return
+    }
+
+    const th = getConversionUniqueCc1Threshold(meta)
+    if (uniqueCc1Seen < th) {
       setConversionUnlockOpen(false)
       return
     }
+
     const eligible =
       meta.conversionUnlockDismissedAt == null &&
       (meta.conversionUnlockEligibleAfter == null || Date.now() >= meta.conversionUnlockEligibleAfter)
@@ -1470,10 +1559,24 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     activatedDecksKnown,
     activatedDecks,
     uniqueCc1Seen,
-    meta.conversionUnlockDismissedAt,
-    meta.conversionUnlockEligibleAfter,
+    meta,
     saveProgressOpen,
   ])
+
+  /** Clear feed lock once “tomorrow” timestamp passes (midnight). */
+  useEffect(() => {
+    const lock = meta.conversionFeedLockedUntil
+    if (lock == null || Date.now() >= lock) return
+    const id = window.setInterval(() => {
+      if (Date.now() >= lock) {
+        setPersisted((p) => ({
+          ...p,
+          meta: { ...p.meta, conversionFeedLockedUntil: undefined },
+        }))
+      }
+    }, 2000)
+    return () => window.clearInterval(id)
+  }, [meta.conversionFeedLockedUntil])
 
   useEffect(() => {
     setShareSheetOpen(false)
@@ -1737,6 +1840,15 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   finalizeSessionRef.current = (swipeDirection: SwipeDirection) => {
     if (finalizedRef.current) return
     if (shouldBlockUnsignedSwipeAfterCap(first20SeenRef.current, Boolean(signedInUserIdRef.current))) return
+    if (signedInUserIdRef.current && !hasActivatedHsk1(activatedDecksRef.current)) {
+      const snap = loadPersistedState()
+      const u = countUniqueCc1VideosSeen(snap.wordStates, cc1WordIds)
+      const maxCap = getHardCapUniqueCc1(snap.meta)
+      const th = getConversionUniqueCc1Threshold(snap.meta)
+      const lockUntil = snap.meta.conversionFeedLockedUntil
+      if (u >= maxCap) return
+      if (lockUntil != null && Date.now() < lockUntil && u >= th) return
+    }
     finalizedRef.current = true
     /* Study state / SRS: only a completed horizontal swipe finalizes a session (cf. EngagementWordPlayer Back). */
 
@@ -2448,11 +2560,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
       <ConversionUnlockModal
         open={conversionUnlockOpen}
+        gateThreshold={cc1GateThreshold}
+        hardPaywallOnly={conversionHardPaywall}
+        finalGateOnly={conversionFinalGate}
+        referredInvitee={Boolean(meta.referredByUserId?.trim())}
         inviteUrl={inviteUrl}
+        inviteCode={meta.referralCode?.trim() ?? null}
         onBuyNow={onConversionBuy}
         onCopyInvite={onConversionCopyInvite}
+        onCopyInviteCode={onConversionCopyInviteCode}
         onRemindTomorrow={onConversionRemindTomorrow}
-        onDismissSoft={dismissConversionSoft}
       />
 
       {giftRedeemError ? (
@@ -2479,6 +2596,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[56] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
         >
           {SIGNED_IN_CLOUD_PROGRESS_MESSAGE}
+        </div>
+      ) : null}
+
+      {referralJoinToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[57] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
+        >
+          {REFERRAL_JOIN_TOAST_MESSAGE}
         </div>
       ) : null}
 

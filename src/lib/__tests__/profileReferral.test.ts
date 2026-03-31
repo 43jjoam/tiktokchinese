@@ -12,6 +12,7 @@ describe('remoteReferralFromDbRow', () => {
       referralCode: null,
       referredByUserId: null,
       referralCount: 0,
+      referralBonusApplied: false,
     })
     expect(
       remoteReferralFromDbRow({
@@ -23,6 +24,7 @@ describe('remoteReferralFromDbRow', () => {
       referralCode: 'ABC12',
       referredByUserId: null,
       referralCount: 3,
+      referralBonusApplied: false,
     })
   })
 
@@ -32,6 +34,7 @@ describe('remoteReferralFromDbRow', () => {
       referralCode: null,
       referredByUserId: id,
       referralCount: 0,
+      referralBonusApplied: false,
     })
   })
 })
