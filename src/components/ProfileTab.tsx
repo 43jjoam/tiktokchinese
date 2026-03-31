@@ -239,39 +239,46 @@ function StatCard({
   )
 }
 
-function ProfileStatsStrip({ meta }: { meta: AppMeta }) {
-  const streak = meta.currentStreak ?? 0
-  const days = meta.totalDaysActive ?? 0
-  const bonus = meta.bonusCardsUnlocked ?? 0
-  const last = meta.lastActiveDate
+/** Wireframe: three columns; tap opens full learning progress (bottom sheet). */
+function ProfileProgressStatsRow({
+  streak,
+  activeDays,
+  charactersMastered,
+  onOpenProgress,
+}: {
+  streak: number
+  activeDays: number
+  charactersMastered: number
+  onOpenProgress: () => void
+}) {
   return (
-    <div
-      className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-[11px] text-white/70"
-      aria-label="Activity streak and profile stats"
+    <button
+      type="button"
+      onClick={onOpenProgress}
+      className="mt-5 w-full rounded-2xl bg-white/[0.04] px-1 py-4 text-left transition-colors active:bg-white/[0.07]"
+      aria-label="Open learning progress — streak, active days, and mastered"
     >
-      <span>
-        <span className="mr-0.5" aria-hidden>
-          🔥
-        </span>
-        <span className="font-semibold tabular-nums text-white/90">{streak}</span>
-        <span className="text-white/50"> day streak</span>
-      </span>
-      <span>
-        <span className="font-semibold tabular-nums text-white/90">{days}</span>
-        <span className="text-white/50"> active days</span>
-      </span>
-      {bonus > 0 ? (
-        <span>
-          <span className="font-semibold tabular-nums text-amber-200/95">+{bonus}</span>
-          <span className="text-white/50"> bonus cards</span>
-        </span>
-      ) : null}
-      {last ? (
-        <span className="text-white/40">Last active {last}</span>
-      ) : (
-        <span className="text-white/35">Streak updates when you study (Home feed)</span>
-      )}
-    </div>
+      <div className="grid grid-cols-3 gap-1">
+        <div className="text-center">
+          <div className="text-[22px] font-bold tabular-nums leading-none text-white">{streak}</div>
+          <div className="mt-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+            {streak === 1 ? 'Day streak' : 'Days streak'}
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="text-[22px] font-bold tabular-nums leading-none text-white">{activeDays}</div>
+          <div className="mt-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+            Active days
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="text-[22px] font-bold tabular-nums leading-none text-white">{charactersMastered}</div>
+          <div className="mt-2 px-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
+            Mastered
+          </div>
+        </div>
+      </div>
+    </button>
   )
 }
 
@@ -598,6 +605,10 @@ export default function ProfileTab() {
     return getProfileUploadDoneUserId() === authUserId ? 'Synced' : 'Up to date'
   }, [authUserId, supabaseConfigured, cloudBadgeRev])
 
+  const streakDays = persisted.meta.currentStreak ?? 0
+  const activeDaysCount = persisted.meta.totalDaysActive ?? 0
+  const charactersMasteredCount = char.stats.mastered
+
   return (
     <div className="relative z-10 mx-auto flex h-dvh w-full flex-col overflow-hidden bg-black md:w-[min(100vw,calc(100dvh*9/16))]">
       <header className="shrink-0 px-4 pt-[max(0.75rem,env(safe-area-inset-top))]">
@@ -607,55 +618,42 @@ export default function ProfileTab() {
           <p className="text-sm text-white/50">Cloud backup is not configured in this build.</p>
         ) : null}
 
-        <button
-          type="button"
-          onClick={() => setStatsSheetOpen(true)}
-          className={`flex w-full flex-row items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left transition-colors active:bg-white/[0.07] ${
-            !authChecked && supabaseConfigured ? 'mt-3' : !supabaseConfigured ? 'mt-3' : ''
+        <div
+          className={`flex flex-col items-center ${
+            !authChecked && supabaseConfigured ? 'mt-4' : !supabaseConfigured ? 'mt-4' : 'mt-1'
           }`}
-          aria-label="Open learning progress"
         >
-          <div className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-bold shadow-lg ring-2 ring-white/10">
-            {profileDisplayLabel.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold text-white">{profileDisplayLabel}</h1>
-            <p className="mt-0.5 text-sm text-white/45">Learning progress</p>
-          </div>
-          <svg
-            viewBox="0 0 24 24"
-            width="22"
-            height="22"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className="shrink-0 text-white/35"
+          <div
+            className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-3xl font-bold text-white shadow-lg ring-2 ring-white/10"
             aria-hidden
           >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
-
-        <ProfileStatsStrip meta={persisted.meta} />
-
-        {authChecked && authEmail ? (
-          <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-white/40">Account</span>
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <span className="min-w-0 truncate text-sm text-white/85" title={authEmail}>
+            {profileDisplayLabel.charAt(0).toUpperCase()}
+          </div>
+          <h1 className="mt-3 max-w-full truncate px-1 text-center text-xl font-bold text-white">
+            {profileDisplayLabel}
+          </h1>
+          {authChecked && authEmail ? (
+            <div className="mt-2 flex max-w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1">
+              <span className="text-center text-sm text-white/55" title={authEmail}>
                 {authEmail}
               </span>
               {accountCloudStatusLabel ? (
-                <span className="shrink-0 text-[11px] font-medium text-emerald-200/90">
+                <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-medium text-emerald-200/90">
                   {accountCloudStatusLabel}
                 </span>
               ) : null}
             </div>
-          </div>
-        ) : null}
+          ) : null}
+        </div>
 
-        <div className="mt-5 border-t border-white/10 pt-4">
-          <p className="mb-2 px-0.5 text-[11px] font-semibold uppercase tracking-wider text-white/40">Your clips</p>
+        <ProfileProgressStatsRow
+          streak={streakDays}
+          activeDays={activeDaysCount}
+          charactersMastered={charactersMasteredCount}
+          onOpenProgress={() => setStatsSheetOpen(true)}
+        />
+
+        <div className="mt-5">
           <EngageTabBar active={engageTab} onChange={setEngageTab} />
         </div>
       </header>
