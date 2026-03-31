@@ -57,6 +57,11 @@ export type AppMeta = {
   referralCount?: number
   /** Mirrors `user_learning_profiles.referral_bonus_applied` after server awards referral bonus. */
   referralBonusApplied?: boolean
+  /**
+   * Which path the user chose at the conversion gate — drives revision mode banner.
+   * 'buy' | 'invite' | 'tomorrow' | undefined (not yet chosen or unlocked).
+   */
+  revisionModePath?: 'buy' | 'invite' | 'tomorrow' | null
 }
 
 export type PersistedState = {

@@ -7,6 +7,7 @@ import {
   PERSISTED_STATE_REPLACED_EVENT,
   setLastUsedAccountEmail,
 } from '../lib/accountSync'
+import { APP_EVENT, logAppEvent } from '../lib/appEvents'
 import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState, type AppMeta } from '../lib/storage'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
@@ -498,6 +499,47 @@ export default function ProfileTab() {
   }, [authEmail, storageRev])
 
   const persisted = useMemo(() => loadPersistedState(), [storageRev, engagementRev])
+  const [profileInviteCopied, setProfileInviteCopied] = useState(false)
+
+  const handleProfileInvite = useCallback(async () => {
+    const code = persisted.meta.referralCode?.trim()
+    const url = code
+      ? `${window.location.origin}/?ref=${encodeURIComponent(code)}`
+      : window.location.origin + '/'
+    const shareData = {
+      url,
+      title: 'Learn Chinese with me',
+      text: "I've been learning Chinese on ChineseFlash \u2014 you get 10 free cards when you join.",
+    }
+    logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'profile_page' })
+    if (navigator.share && navigator.canShare?.(shareData)) {
+      try {
+        await navigator.share(shareData)
+        return
+      } catch {
+        /* fall through to clipboard */
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      try {
+        const ta = document.createElement('textarea')
+        ta.value = url
+        ta.setAttribute('readonly', '')
+        ta.style.position = 'fixed'
+        ta.style.left = '-9999px'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      } catch {
+        /* ignore */
+      }
+    }
+    setProfileInviteCopied(true)
+    window.setTimeout(() => setProfileInviteCopied(false), 2000)
+  }, [persisted.meta.referralCode])
   const ws = persisted.wordStates
   const charWords = feedWordList.filter((w) => getWordContentKind(w) === 'character')
   const vocabWords = feedWordList.filter((w) => getWordContentKind(w) === 'vocabulary')
@@ -643,6 +685,22 @@ export default function ProfileTab() {
                 </span>
               ) : null}
             </div>
+          ) : null}
+        </div>
+
+        {/* Invite a friend */}
+        <div className="mt-3 flex flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={() => void handleProfileInvite()}
+            className="w-full max-w-[16rem] rounded-xl bg-sky-600 py-2.5 text-sm font-semibold text-white shadow-md shadow-sky-900/40 transition-colors hover:bg-sky-500 active:scale-[0.98] active:bg-sky-700"
+          >
+            {profileInviteCopied ? 'Link copied!' : 'Invite a friend'}
+          </button>
+          {persisted.meta.referralCode?.trim() ? (
+            <p className="text-[11px] text-white/35">
+              Your code: {persisted.meta.referralCode.trim().toUpperCase()}
+            </p>
           ) : null}
         </div>
 

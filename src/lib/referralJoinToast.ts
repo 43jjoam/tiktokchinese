@@ -4,7 +4,7 @@ export const LAST_KNOWN_REFERRAL_COUNT_KEY = 'tiktokchinese_last_known_referral_
 export const REFERRAL_JOIN_TOAST_EVENT = 'tiktokchinese:referral-join-toast'
 
 export const REFERRAL_JOIN_TOAST_MESSAGE =
-  'Your friend just joined — you unlocked 20 more cards. They get 10. Tap Home to keep learning.'
+  'Your friend just joined \u2014 you both unlocked more cards. Keep going.'
 
 /**
  * After merge updates `referralCount` from Supabase, show a toast when the count increased.

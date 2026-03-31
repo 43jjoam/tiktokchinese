@@ -87,11 +87,13 @@ import {
   getCc1WordIds,
   getConversionUniqueCc1Threshold,
   getHardCapUniqueCc1,
+  getHsk1ShopUrl,
   hasActivatedHsk1,
   isFinalGateUniqueCc1,
   startOfNextLocalDayMs,
 } from '../lib/conversionUnlock'
 import { ConversionUnlockModal } from './ConversionUnlockModal'
+import { RevisionModeBanner } from './RevisionModeBanner'
 import { SaveProgressModal } from './SaveProgressModal'
 import { ShareWordSheet } from './ShareWordSheet'
 import { prefetchYouTubeIframeApi, YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
@@ -894,6 +896,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const [referralJoinToast, setReferralJoinToast] = useState(false)
   /** Shown when sign-in sync did not produce cloud profile data (or upload failed). */
   const [cloudBackupHint, setCloudBackupHint] = useState<string | null>(null)
+  const [revisionUnlockedToast, setRevisionUnlockedToast] = useState(false)
   const [signedInUserId, setSignedInUserId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1466,31 +1469,23 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
   const onConversionCopyInvite = useCallback(() => {
     logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'invite' })
-    logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'link' })
+    logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'unlock_screen' })
+    logAppEvent(APP_EVENT.REVISION_MODE_ENTERED, { value: 'invite' })
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
       ...p,
-      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now() },
-    }))
-  }, [])
-
-  const onConversionCopyInviteCode = useCallback(() => {
-    logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'invite' })
-    logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'code' })
-    setConversionUnlockOpen(false)
-    setPersisted((p) => ({
-      ...p,
-      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now() },
+      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now(), revisionModePath: 'invite' },
     }))
   }, [])
 
   const onConversionBuy = useCallback(() => {
     logAppEvent(APP_EVENT.UNLOCK_PATH_SELECTED, { value: 'buy' })
     logAppEvent(APP_EVENT.BUY_BUTTON_TAPPED)
+    logAppEvent(APP_EVENT.REVISION_MODE_ENTERED, { value: 'buy' })
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
       ...p,
-      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now() },
+      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now(), revisionModePath: 'buy' },
     }))
   }, [])
 
@@ -1499,6 +1494,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     logAppEvent(APP_EVENT.TOMORROW_SELECTED, {
       streak: Math.max(0, Math.floor(Number(meta.currentStreak ?? 0))),
     })
+    logAppEvent(APP_EVENT.REVISION_MODE_ENTERED, { value: 'tomorrow' })
     const next = startOfNextLocalDayMs()
     setConversionUnlockOpen(false)
     setPersisted((p) => ({
@@ -1506,7 +1502,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       meta: {
         ...p.meta,
         conversionUnlockEligibleAfter: next,
-        conversionFeedLockedUntil: next,
+        revisionModePath: 'tomorrow',
       },
     }))
     void scheduleStreakReminderEmail(STREAK_REMINDER_DELAY_HOURS)
@@ -1544,9 +1540,14 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       return
     }
 
+    // Once a path has been chosen, don't re-show the modal (revision mode banner handles it)
+    const alreadyChose = meta.revisionModePath != null || meta.conversionUnlockDismissedAt != null
+    if (alreadyChose) {
+      setConversionUnlockOpen(false)
+      return
+    }
     const eligible =
-      meta.conversionUnlockDismissedAt == null &&
-      (meta.conversionUnlockEligibleAfter == null || Date.now() >= meta.conversionUnlockEligibleAfter)
+      meta.conversionUnlockEligibleAfter == null || Date.now() >= meta.conversionUnlockEligibleAfter
     if (!eligible) {
       setConversionUnlockOpen(false)
       return
@@ -1563,20 +1564,23 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     saveProgressOpen,
   ])
 
-  /** Clear feed lock once “tomorrow” timestamp passes (midnight). */
+  /**
+   * Clear revisionModePath when the unlock condition is met (HSK1 activated or bonus cards
+   * pushed uniqueCc1Seen below the gate), and show a "New characters unlocked" toast.
+   */
   useEffect(() => {
-    const lock = meta.conversionFeedLockedUntil
-    if (lock == null || Date.now() >= lock) return
-    const id = window.setInterval(() => {
-      if (Date.now() >= lock) {
-        setPersisted((p) => ({
-          ...p,
-          meta: { ...p.meta, conversionFeedLockedUntil: undefined },
-        }))
-      }
-    }, 2000)
-    return () => window.clearInterval(id)
-  }, [meta.conversionFeedLockedUntil])
+    if (!meta.revisionModePath) return
+    const nowUnlocked =
+      hasActivatedHsk1(activatedDecks) ||
+      (!isFinalGateUniqueCc1(uniqueCc1Seen) && uniqueCc1Seen < getConversionUniqueCc1Threshold(meta))
+    if (!nowUnlocked) return
+    setPersisted((p) => ({
+      ...p,
+      meta: { ...p.meta, revisionModePath: null, conversionUnlockDismissedAt: undefined, conversionUnlockEligibleAfter: undefined },
+    }))
+    setRevisionUnlockedToast(true)
+    window.setTimeout(() => setRevisionUnlockedToast(false), 4000)
+  }, [meta.revisionModePath, activatedDecks, uniqueCc1Seen, meta])
 
   useEffect(() => {
     setShareSheetOpen(false)
@@ -1844,10 +1848,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       const snap = loadPersistedState()
       const u = countUniqueCc1VideosSeen(snap.wordStates, cc1WordIds)
       const maxCap = getHardCapUniqueCc1(snap.meta)
-      const th = getConversionUniqueCc1Threshold(snap.meta)
-      const lockUntil = snap.meta.conversionFeedLockedUntil
       if (u >= maxCap) return
-      if (lockUntil != null && Date.now() < lockUntil && u >= th) return
     }
     finalizedRef.current = true
     /* Study state / SRS: only a completed horizontal swipe finalizes a session (cf. EngagementWordPlayer Back). */
@@ -2159,6 +2160,23 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         >
           Sign in
         </button>
+      ) : null}
+
+      {/* Revision mode banner — shown after user picks a path at the gate */}
+      {meta.revisionModePath && !conversionUnlockOpen && !hasActivatedHsk1(activatedDecks) ? (
+        <div className="pointer-events-auto fixed left-0 right-0 top-[env(safe-area-inset-top,0px)] z-[80]">
+          <RevisionModeBanner
+            path={meta.revisionModePath}
+            inviteUrl={inviteUrl}
+            onCopyInvite={() => {
+              logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'unlock_screen' })
+            }}
+            onOpenShop={() => {
+              logAppEvent(APP_EVENT.BUY_BUTTON_TAPPED)
+              window.open(getHsk1ShopUrl(), '_blank', 'noopener,noreferrer')
+            }}
+          />
+        </div>
       ) : null}
 
       <div
@@ -2560,7 +2578,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
 
       <ConversionUnlockModal
         open={conversionUnlockOpen}
-        gateThreshold={cc1GateThreshold}
+        uniqueCc1Seen={uniqueCc1Seen}
         hardPaywallOnly={conversionHardPaywall}
         finalGateOnly={conversionFinalGate}
         referredInvitee={Boolean(meta.referredByUserId?.trim())}
@@ -2568,7 +2586,6 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         inviteCode={meta.referralCode?.trim() ?? null}
         onBuyNow={onConversionBuy}
         onCopyInvite={onConversionCopyInvite}
-        onCopyInviteCode={onConversionCopyInviteCode}
         onRemindTomorrow={onConversionRemindTomorrow}
       />
 
@@ -2606,6 +2623,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[57] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
         >
           {REFERRAL_JOIN_TOAST_MESSAGE}
+        </div>
+      ) : null}
+
+      {revisionUnlockedToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[58] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-indigo-400/35 bg-indigo-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-indigo-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-indigo-400/20 backdrop-blur-sm"
+        >
+          New characters unlocked. Keep going.
         </div>
       ) : null}
 

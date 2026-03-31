@@ -19,14 +19,12 @@ function json(status: number, body: Record<string, unknown>): Response {
   });
 }
 
-async function sendReminderEmail(to: string, streakDays: number): Promise<void> {
+async function sendReminderEmail(to: string, bonusCardsUnlocked: number): Promise<void> {
   if (!RESEND_API_KEY) {
     throw new Error("RESEND_API_KEY not configured");
   }
-  const streakLine =
-    streakDays > 0
-      ? `You’re on a <strong>${streakDays}-day</strong> streak — nice work.`
-      : "Your learning streak is ready when you are.";
+  // Approximate characters met: 20 base + server bonus cards
+  const charsMet = 20 + Math.max(0, bonusCardsUnlocked);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -39,13 +37,12 @@ async function sendReminderEmail(to: string, streakDays: number): Promise<void> 
       subject: "Your Chinese Flash streak is waiting",
       html: `
         <div style="font-family: system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 20px; color: #1a1a2e;">
-          <h2 style="margin-top: 0;">Time to come back</h2>
-          <p>You asked for a reminder — <strong>10 more free cards</strong> unlock when you return today.</p>
-          <p>${streakLine}</p>
+          <h2 style="margin-top: 0;">Come back today</h2>
+          <p>You met <strong>${charsMet} characters</strong> yesterday. Come back today \u2014 10 more are waiting.</p>
           <p style="margin-top: 24px;">
             <a href="${APP_URL}/" style="display: inline-block; background: #4f46e5; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 10px; font-weight: 600;">Open Chinese Flash</a>
           </p>
-          <p style="color: #666; font-size: 13px; margin-top: 32px;">If you’re not learning Chinese anymore, you can ignore this email.</p>
+          <p style="color: #666; font-size: 13px; margin-top: 32px;">If you're not learning Chinese anymore, you can ignore this email.</p>
         </div>
       `,
     }),
@@ -81,10 +78,9 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
   const nowIso = new Date().toISOString();
 
-  // Only `user_id` — `current_streak` exists only after setup_user_profile_stats_columns.sql; email copy defaults to generic streak line when absent.
   const { data: rows, error: qErr } = await admin
     .from("user_learning_profiles")
-    .select("user_id")
+    .select("user_id, bonus_cards_unlocked")
     .not("streak_reminder_scheduled_at", "is", null)
     .is("streak_reminder_sent_at", null)
     .lte("streak_reminder_scheduled_at", nowIso)
@@ -101,7 +97,7 @@ Deno.serve(async (req) => {
 
   for (const row of list) {
     const uid = row.user_id as string;
-    const streakDays = 0;
+    const bonusCardsUnlocked = Math.max(0, Number(row.bonus_cards_unlocked ?? 0) || 0);
     try {
       const { data: authData, error: uErr } = await admin.auth.admin.getUserById(uid);
       const emailRaw = authData?.user?.email?.trim();
@@ -109,10 +105,8 @@ Deno.serve(async (req) => {
         errors.push(`${uid}: no email`);
         continue;
       }
-      const email = emailRaw;
-      if (!email) continue;
 
-      await sendReminderEmail(email, streakDays);
+      await sendReminderEmail(emailRaw, bonusCardsUnlocked);
 
       const { error: upErr } = await admin
         .from("user_learning_profiles")

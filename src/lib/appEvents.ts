@@ -17,6 +17,7 @@ export const APP_EVENT = {
   /** Not in spec table; use for failed apply attempts. */
   MANUAL_CODE_APPLY_FAILED: 'manual_code_apply_failed',
   TOMORROW_SELECTED: 'tomorrow_selected',
+  REVISION_MODE_ENTERED: 'revision_mode_entered',
   REMINDER_EMAIL_SENT: 'reminder_email_sent',
   USER_RETURNED_AFTER_REMINDER: 'user_returned_after_reminder',
 } as const

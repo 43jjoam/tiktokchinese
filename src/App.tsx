@@ -20,6 +20,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
+    const goToLibrary = () => setActiveTab('library')
+    window.addEventListener('tiktokchinese:go-to-library', goToLibrary)
+    return () => window.removeEventListener('tiktokchinese:go-to-library', goToLibrary)
+  }, [])
+
+  useEffect(() => {
     document.title = showAuthCallback ? AUTH_DOC_TITLE : APP_DOC_TITLE
   }, [showAuthCallback])
 
