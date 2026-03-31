@@ -1,0 +1,29 @@
+# Calls the Supabase Edge Function on a schedule so due streak reminders are emailed (Resend).
+#
+# Setup (repo → Settings → Secrets and variables → Actions):
+#   STREAK_REMINDER_CRON_SECRET — same value as Supabase Edge Function secret of that name
+#
+# Optional: change the schedule below (UTC). Default: every 15 minutes.
+
+name: Send streak reminders
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: POST send-streak-reminders
+        env:
+          URL: https://zazqappkkjyvmfezvirj.supabase.co/functions/v1/send-streak-reminders
+          SECRET: ${{ secrets.STREAK_REMINDER_CRON_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then
+            echo "::error::Add repository secret STREAK_REMINDER_CRON_SECRET (same as in Supabase Edge Function secrets)"
+            exit 1
+          fi
+          curl -sS -f -X POST "$URL" \
+            -H "Authorization: Bearer ${SECRET}"
