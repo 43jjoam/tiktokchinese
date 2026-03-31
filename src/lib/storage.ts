@@ -21,6 +21,17 @@ export type AppMeta = {
   accountSaveNotNowCount?: number
   /** Magic link sent; suppress re-showing the prompt until sign-in */
   accountMagicLinkSentAt?: number
+  /** @deprecated Guest three-path UI removed; kept for legacy localStorage merge. */
+  unlockChoiceDeferredAt?: number
+  /**
+   * Post-auth conversion modal (20 unique CC1 videos): set when user completes invite copy or opens shop —
+   * do not show again.
+   */
+  conversionUnlockDismissedAt?: number
+  /**
+   * Post-auth conversion modal: show only when `Date.now() >= this` (e.g. after “Remind tomorrow” or soft dismiss).
+   */
+  conversionUnlockEligibleAfter?: number
   /** ISO timestamp from `user_learning_profiles.updated_at` after last merge or upload */
   lastMergedRemoteUpdatedAt?: string | null
   /** Supabase `user.id` that `lastMergedRemoteUpdatedAt` refers to — avoids skipping merge for the wrong account */

@@ -19,6 +19,7 @@ import {
 } from '../lib/engagementService'
 import {
   createLessonVideoSignedUrl,
+  devPreferYoutubeFallback,
   peekCachedLessonVideoSignedUrl,
 } from '../lib/storageVideoUrl'
 import { resolveCharacterCompounds } from '../lib/characterCompounds'
@@ -202,6 +203,10 @@ export function EngagementWordPlayer({
     const goYoutubeBackup = () => {
       setNativePlaybackSrc(null)
       queueMicrotask(() => setYoutubeFallback(true))
+    }
+    if (devPreferYoutubeFallback() && canUseYoutubeBackup) {
+      goYoutubeBackup()
+      return
     }
     const client = getSupabaseClient()
     if (!client) {

@@ -16,6 +16,7 @@ import {
   qualityVideoIdForWord,
   shouldBlockUnsignedSwipeAfterCap,
 } from '../lib/studySessionSwipeFinish'
+import { applyStreakForFirstWatchOfDay } from '../lib/streak'
 import {
   loadCurrentWordId,
   loadPersistedState,
@@ -23,7 +24,12 @@ import {
   savePersistedState,
   type AppMeta,
 } from '../lib/storage'
-import { BUILTIN_CHINESE_CHARACTERS_1, getActivatedDecks, getSupabaseClient } from '../lib/deckService'
+import {
+  BUILTIN_CHINESE_CHARACTERS_1,
+  getActivatedDecks,
+  getSupabaseClient,
+  type DeckInfo,
+} from '../lib/deckService'
 import {
   engagementSetLike,
   engagementSetSave,
@@ -38,6 +44,7 @@ import {
 } from '../lib/engagementService'
 import {
   createLessonVideoSignedUrl,
+  devPreferYoutubeFallback,
   peekCachedLessonVideoSignedUrl,
   prefetchLessonVideoSignedUrls,
 } from '../lib/storageVideoUrl'
@@ -64,6 +71,14 @@ import {
   userFacingProfileUploadError,
 } from '../lib/accountSync'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
+import {
+  CONVERSION_UNIQUE_CC1_THRESHOLD,
+  countUniqueCc1VideosSeen,
+  getCc1WordIds,
+  hasActivatedHsk1,
+  startOfNextLocalDayMs,
+} from '../lib/conversionUnlock'
+import { ConversionUnlockModal } from './ConversionUnlockModal'
 import { SaveProgressModal } from './SaveProgressModal'
 import { ShareWordSheet } from './ShareWordSheet'
 import { prefetchYouTubeIframeApi, YouTubeEmbedPlayer } from './YouTubeEmbedPlayer'
@@ -791,12 +806,16 @@ function stripSupabaseOAuthParamsFromUrl(): void {
 export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedProps) {
   /** Chinese Characters 1 by default; + purchased decks (e.g. HSK 1) after activation. */
   const [words, setWords] = useState<WordMetadata[]>(() => buildHomeFeedWords([]))
+  const [activatedDecks, setActivatedDecks] = useState<DeckInfo[]>([])
+  const [activatedDecksKnown, setActivatedDecksKnown] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     const refreshFeedWords = () => {
       void getActivatedDecks().then((decks) => {
         if (cancelled) return
+        setActivatedDecks(decks)
+        setActivatedDecksKnown(true)
         setWords(buildHomeFeedWords(decks))
       })
     }
@@ -859,6 +878,33 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [persisted])
 
   const { wordStates, videoQuality, meta } = persisted
+
+  const cc1WordIds = useMemo(() => getCc1WordIds(), [])
+  const uniqueCc1Seen = useMemo(
+    () => countUniqueCc1VideosSeen(wordStates, cc1WordIds),
+    [wordStates, cc1WordIds],
+  )
+
+  const [conversionEligiblePoll, setConversionEligiblePoll] = useState(0)
+
+  /** Re-evaluate eligibility when “eligible after” timestamp passes (e.g. next local day). */
+  useEffect(() => {
+    const after = meta.conversionUnlockEligibleAfter
+    if (after == null || Date.now() >= after) return
+    const id = window.setInterval(() => {
+      if (Date.now() >= after) setConversionEligiblePoll((c) => c + 1)
+    }, 30_000)
+    return () => window.clearInterval(id)
+  }, [meta.conversionUnlockEligibleAfter])
+
+  const [conversionUnlockOpen, setConversionUnlockOpen] = useState(false)
+
+  const inviteUrl = useMemo(() => {
+    const code = meta.referralCode?.trim()
+    const base = `${window.location.origin}/`
+    if (!code) return base
+    return `${base}?ref=${encodeURIComponent(code)}`
+  }, [meta.referralCode])
 
   const signedInUserIdRef = useRef(signedInUserId)
   signedInUserIdRef.current = signedInUserId
@@ -951,6 +997,15 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     }
   }, [persisted])
 
+  /** Clear post–20 defer once signed in — cloud is source of truth. */
+  useEffect(() => {
+    if (!signedInUserId) return
+    setPersisted((p) => {
+      if (p.meta.unlockChoiceDeferredAt == null) return p
+      return { ...p, meta: { ...p.meta, unlockChoiceDeferredAt: undefined } }
+    })
+  }, [signedInUserId])
+
   useEffect(() => {
     const client = getSupabaseClient()
     if (!client) return
@@ -987,7 +1042,12 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       setSaveProgressWelcomeBack(Boolean(getLastUsedAccountEmail()))
       setSaveProgressOpen(true)
     })
-  }, [meta.first20Seen, meta.accountSaveNotNowCount, meta.accountMagicLinkSentAt, signedInUserId])
+  }, [
+    meta.first20Seen,
+    meta.accountSaveNotNowCount,
+    meta.accountMagicLinkSentAt,
+    signedInUserId,
+  ])
 
   useEffect(() => {
     if (!saveProgressOpen) setSaveProgressWelcomeBack(false)
@@ -1142,6 +1202,12 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       queueMicrotask(() => setYoutubeFallback(true))
     }
 
+    if (devPreferYoutubeFallback() && canUseYoutubeBackup) {
+      console.warn('[VideoFeed] VITE_DEV_PREFER_YOUTUBE_FALLBACK=1 — using YouTube (skipping Storage signing).')
+      goYoutubeBackup()
+      return
+    }
+
     const client = getSupabaseClient()
     if (!client) {
       if (canUseYoutubeBackup) {
@@ -1294,6 +1360,77 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     setSaveProgressForceLinkSent(false)
   }, [])
 
+  const dismissConversionSoft = useCallback(() => {
+    setConversionUnlockOpen(false)
+    setPersisted((p) => ({
+      ...p,
+      meta: {
+        ...p.meta,
+        conversionUnlockEligibleAfter: startOfNextLocalDayMs(),
+      },
+    }))
+  }, [])
+
+  const onConversionCopyInvite = useCallback(() => {
+    setConversionUnlockOpen(false)
+    setPersisted((p) => ({
+      ...p,
+      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now() },
+    }))
+  }, [])
+
+  const onConversionBuy = useCallback(() => {
+    setConversionUnlockOpen(false)
+    setPersisted((p) => ({
+      ...p,
+      meta: { ...p.meta, conversionUnlockDismissedAt: Date.now() },
+    }))
+  }, [])
+
+  const onConversionRemindTomorrow = useCallback(() => {
+    setConversionUnlockOpen(false)
+    setPersisted((p) => ({
+      ...p,
+      meta: {
+        ...p.meta,
+        conversionUnlockEligibleAfter: startOfNextLocalDayMs(),
+      },
+    }))
+  }, [])
+
+  useEffect(() => {
+    if (!signedInUserId || !activatedDecksKnown) {
+      setConversionUnlockOpen(false)
+      return
+    }
+    if (hasActivatedHsk1(activatedDecks)) {
+      setConversionUnlockOpen(false)
+      return
+    }
+    if (uniqueCc1Seen < CONVERSION_UNIQUE_CC1_THRESHOLD) {
+      setConversionUnlockOpen(false)
+      return
+    }
+    const eligible =
+      meta.conversionUnlockDismissedAt == null &&
+      (meta.conversionUnlockEligibleAfter == null || Date.now() >= meta.conversionUnlockEligibleAfter)
+    if (!eligible) {
+      setConversionUnlockOpen(false)
+      return
+    }
+    if (saveProgressOpen) return
+    setConversionUnlockOpen(true)
+  }, [
+    conversionEligiblePoll,
+    signedInUserId,
+    activatedDecksKnown,
+    activatedDecks,
+    uniqueCc1Seen,
+    meta.conversionUnlockDismissedAt,
+    meta.conversionUnlockEligibleAfter,
+    saveProgressOpen,
+  ])
+
   useEffect(() => {
     setShareSheetOpen(false)
   }, [currentWord.word_id])
@@ -1327,14 +1464,25 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     feedBufferedRef.current = false
   }, [])
 
+  /** Step 4: daily streak on first playable moment of the first card (`sessionVideoIndex === 0`). Server copy: debounced `[persisted]` effect below calls `uploadLearningProfileWithLocalMeta` when signed in. */
+  const bumpStreakIfFirstCardOfSession = useCallback(() => {
+    if (sessionVideoIndexRef.current !== 0) return
+    setPersisted((p) => {
+      const nextMeta = applyStreakForFirstWatchOfDay(p.meta)
+      if (nextMeta === p.meta) return p
+      return { ...p, meta: nextMeta }
+    })
+  }, [])
+
   const markFeedPlayable = useCallback(() => {
     if (!swipeTransitionLineRef.current) {
       setVideoReady(true)
+      bumpStreakIfFirstCardOfSession()
       return
     }
     feedBufferedRef.current = true
     tryCompleteSwipeEncouragement()
-  }, [tryCompleteSwipeEncouragement])
+  }, [tryCompleteSwipeEncouragement, bumpStreakIfFirstCardOfSession])
 
   const [liked, setLiked] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -2252,6 +2400,15 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
         onDismissWithoutAccount={dismissSaveProgress}
         onMagicLinkSent={recordMagicLinkSent}
         onAcknowledgeLinkSent={acknowledgeLinkSent}
+      />
+
+      <ConversionUnlockModal
+        open={conversionUnlockOpen}
+        inviteUrl={inviteUrl}
+        onBuyNow={onConversionBuy}
+        onCopyInvite={onConversionCopyInvite}
+        onRemindTomorrow={onConversionRemindTomorrow}
+        onDismissSoft={dismissConversionSoft}
       />
 
       {giftRedeemError ? (

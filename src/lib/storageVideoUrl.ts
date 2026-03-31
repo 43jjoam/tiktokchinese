@@ -1,6 +1,14 @@
 import { getSupabaseClient } from './deckService'
 import type { WordMetadata } from './types'
 
+/**
+ * Dev-only: set `VITE_DEV_PREFER_YOUTUBE_FALLBACK=1` in `.env.local` to skip Storage signing and use
+ * `youtube_url` immediately (repo has no `public/videos/*.mp4` — local dev often relies on Shorts).
+ */
+export function devPreferYoutubeFallback(): boolean {
+  return import.meta.env.DEV && import.meta.env.VITE_DEV_PREFER_YOUTUBE_FALLBACK === '1'
+}
+
 /** Default private bucket for Chinese Characters 1 deck MP4s (matches Supabase Storage bucket id). */
 const CHINESE_CHARACTERS_1_VIDEO_BUCKET_ID = 'chinese character 1 _videos'
 
@@ -92,15 +100,20 @@ export async function createLessonVideoSignedUrl(
   const pending = inflightSigned.get(key)
   if (pending) return pending
 
-  const promise = (async () => {
-    const result = await signOnce(client, bucket, path)
-    if ('url' in result) {
-      signedUrlCache.set(key, {
-        url: result.url,
-        validUntil: Date.now() + (EXPIRY_SEC - CACHE_SKEW_SEC) * 1000,
-      })
+  const promise = (async (): Promise<{ url: string } | { error: string }> => {
+    try {
+      const result = await signOnce(client, bucket, path)
+      if ('url' in result) {
+        signedUrlCache.set(key, {
+          url: result.url,
+          validUntil: Date.now() + (EXPIRY_SEC - CACHE_SKEW_SEC) * 1000,
+        })
+      }
+      return result
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      return { error: msg || 'createSignedUrl threw' }
     }
-    return result
   })().finally(() => {
     inflightSigned.delete(key)
   })

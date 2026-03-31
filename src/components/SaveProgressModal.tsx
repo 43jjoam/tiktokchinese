@@ -147,8 +147,7 @@ export function SaveProgressModal({
     window.setTimeout(() => setResendOkFlash(false), 5000)
   }, [magicLinkTargetEmail, resendCooldownUntil, onMagicLinkSent])
 
-  const backdropDismissible =
-    !linkSentHardLocked && (sent ? true : allowNotNow)
+  const backdropDismissible = !linkSentHardLocked && (sent ? true : allowNotNow)
 
   useEffect(() => {
     if (!open) return

@@ -15,10 +15,14 @@ export default defineConfig(({ mode }) => {
       } catch {
         /* keep */
       }
-      console.log(`\n  [tiktokchinese] Supabase env OK — ${host} (anon key loaded)\n`)
+      console.log(
+        `\n  [tiktokchinese] Supabase env OK — ${host} (anon key loaded)\n` +
+          '  [tiktokchinese] If videos stay blank locally, ensure Storage signing works or set VITE_DEV_PREFER_YOUTUBE_FALLBACK=1 in .env.local\n',
+      )
     } else {
       console.warn(
-        '\n  [tiktokchinese] Supabase env missing — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local\n',
+        '\n  [tiktokchinese] Supabase env missing — set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local\n' +
+          '  [tiktokchinese] Videos: without Storage, the app falls back to YouTube Shorts. To skip signing in dev, add VITE_DEV_PREFER_YOUTUBE_FALLBACK=1\n',
       )
     }
   }
