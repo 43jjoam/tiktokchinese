@@ -1,9 +1,7 @@
 import { AnimatePresence } from 'framer-motion'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { getAuthEmail, uploadLearningProfileWithLocalMeta } from '../lib/accountSync'
+import { getAuthEmail } from '../lib/accountSync'
 import { APP_EVENT, logAppEvent } from '../lib/appEvents'
-import { tryNotifyReferrerJoinEmail } from '../lib/notifyReferrerJoin'
-import { applyReferralCodeFromManualEntry } from '../lib/referralLanding'
 import { fetchPublicCatalogCoverUrls } from '../lib/catalogCovers'
 import { activateCode, getActivatedDecks, getSupabaseClient, type DeckInfo } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT } from '../lib/deckWords'
@@ -18,14 +16,7 @@ export default function LibraryTab() {
   const [openDeck, setOpenDeck] = useState<DeckInfo | null>(null)
   const [catalogCoverByKey, setCatalogCoverByKey] = useState<Record<string, string>>({})
   const [authEmail, setAuthEmail] = useState<string | null>(null)
-  const [authUserId, setAuthUserId] = useState<string | null>(null)
-  const [friendInviteCode, setFriendInviteCode] = useState('')
-  const [friendInviteBusy, setFriendInviteBusy] = useState(false)
-  const [friendInviteMessage, setFriendInviteMessage] = useState<{ text: string; ok: boolean } | null>(
-    null,
-  )
   const activatePendingRef = useRef(0)
-  const friendInvitePendingRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
@@ -56,18 +47,13 @@ export default function LibraryTab() {
     const client = getSupabaseClient()
     if (!client) {
       setAuthEmail(null)
-      setAuthUserId(null)
       return
     }
     void getAuthEmail().then(setAuthEmail)
-    void client.auth.getSession().then(({ data: { session } }) => {
-      setAuthUserId(session?.user?.id ?? null)
-    })
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, session) => {
       setAuthEmail(session?.user?.email ?? null)
-      setAuthUserId(session?.user?.id ?? null)
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -99,56 +85,6 @@ export default function LibraryTab() {
       if (activatePendingRef.current === 0) setActivating(false)
     }
   }, [code])
-
-  const handleFriendInviteSubmit = useCallback(async () => {
-    if (!friendInviteCode.trim()) return
-    const uid = authUserId
-    if (!uid) {
-      setFriendInviteMessage({ text: 'Sign in from the Home tab to connect a friend invite.', ok: false })
-      return
-    }
-    friendInvitePendingRef.current += 1
-    setFriendInviteBusy(true)
-    setFriendInviteMessage(null)
-    try {
-      const result = await applyReferralCodeFromManualEntry(friendInviteCode, uid)
-      if (!result.ok) {
-        logAppEvent(APP_EVENT.MANUAL_CODE_APPLY_FAILED, { reason: result.message })
-        setFriendInviteMessage({ text: result.message, ok: false })
-        return
-      }
-      const up = await uploadLearningProfileWithLocalMeta()
-      if (!up.ok) {
-        logAppEvent(APP_EVENT.MANUAL_CODE_APPLY_FAILED, { reason: 'upload', detail: up.error })
-        setFriendInviteMessage({
-          text: 'Invite saved locally but cloud sync failed. Open Home and try again in a moment.',
-          ok: false,
-        })
-        return
-      }
-      logAppEvent(APP_EVENT.MANUAL_CODE_APPLIED)
-      void tryNotifyReferrerJoinEmail()
-      setFriendInviteMessage({
-        text: 'Connected! You and your friend each get bonus cards when the server applies the reward.',
-        ok: true,
-      })
-      setFriendInviteCode('')
-    } catch (e) {
-      console.error('[Library] friend invite', e)
-      logAppEvent(APP_EVENT.MANUAL_CODE_APPLY_FAILED, {
-        reason: 'exception',
-        detail: e instanceof Error ? e.message : String(e),
-      })
-      setFriendInviteMessage({
-        text: e instanceof Error ? e.message : 'Something went wrong. Try again.',
-        ok: false,
-      })
-    } finally {
-      friendInvitePendingRef.current -= 1
-      if (friendInvitePendingRef.current < 0) friendInvitePendingRef.current = 0
-      if (friendInvitePendingRef.current === 0) setFriendInviteBusy(false)
-    }
-  }, [friendInviteCode, authUserId])
 
   return (
     <div className="relative z-10 mx-auto h-dvh w-full max-w-lg overflow-y-auto bg-black px-5 pb-20 pt-4 md:max-w-xl">
@@ -189,42 +125,6 @@ export default function LibraryTab() {
         {message && (
           <p className={`mt-2 text-xs ${message.ok ? 'text-green-400' : 'text-red-400'}`}>
             {message.text}
-          </p>
-        )}
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Have an invite code from a friend?</h2>
-        <p className="mt-1.5 text-xs text-white/45 leading-relaxed">
-          Got a code by text instead of a link? Enter it here after you sign in — same reward as opening an invite
-          link.
-        </p>
-        <div className="mt-2 flex gap-2">
-          <input
-            type="text"
-            inputMode="text"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            spellCheck={false}
-            value={friendInviteCode}
-            onChange={(e) => setFriendInviteCode(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleFriendInviteSubmit()}
-            placeholder="8-character code"
-            disabled={!authUserId}
-            className="flex-1 rounded-lg border border-white/15 bg-white/5 px-4 py-3 text-sm uppercase tracking-wide text-white placeholder-white/30 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors disabled:opacity-50"
-          />
-          <button
-            type="button"
-            onClick={handleFriendInviteSubmit}
-            disabled={friendInviteBusy || !authUserId}
-            className="shrink-0 rounded-lg bg-sky-600 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-sky-900/40 transition-colors hover:bg-sky-500 active:scale-[0.98] active:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
-          >
-            {friendInviteBusy ? '…' : 'Apply'}
-          </button>
-        </div>
-        {friendInviteMessage && (
-          <p className={`mt-2 text-xs ${friendInviteMessage.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {friendInviteMessage.text}
           </p>
         )}
       </div>
