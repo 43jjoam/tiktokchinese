@@ -105,6 +105,19 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
         } = await client.auth.getSession()
         if (!cancelled && session?.user) finishOk()
       } catch (e) {
+        if (cancelled) return
+        // The auth lock may have been forcefully stolen (AbortError) mid-operation,
+        // but verifyOtp/initialize may have already established the session.
+        // Check once before showing an error — if signed in, proceed normally.
+        try {
+          const { data: { session: checkSession } } = await client.auth.getSession()
+          if (!cancelled && checkSession?.user) {
+            finishOk()
+            return
+          }
+        } catch {
+          /* ignore — fall through to error UI */
+        }
         if (!cancelled) {
           setDetail(e instanceof Error ? e.message : 'Sign-in failed.')
           setPhase('error')
