@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupabaseClient } from '../lib/deckService'
+import { captureReferralFromUrl } from '../lib/referralLanding'
 
 type Phase = 'working' | 'done' | 'error'
 
@@ -21,6 +22,8 @@ export function AuthCallbackLanding({ onFinished }: { onFinished: () => void }) 
   const [detail, setDetail] = useState<string | null>(null)
 
   const goHome = useCallback(() => {
+    // Capture ?ref=CODE before wiping the URL so attribution survives the redirect.
+    captureReferralFromUrl()
     try {
       window.history.replaceState({}, '', '/')
     } catch {
