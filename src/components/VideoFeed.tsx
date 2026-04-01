@@ -93,8 +93,9 @@ import {
   isFinalGateUniqueCc1,
   startOfNextLocalDayMs,
 } from '../lib/conversionUnlock'
-import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
+import { openHsk1Checkout } from '../lib/hsk1Checkout'
 import { ConversionUnlockModal } from './ConversionUnlockModal'
+import { SecuringCheckoutToast } from './SecuringCheckoutToast'
 import { RevisionModeBanner } from './RevisionModeBanner'
 import { SaveProgressModal } from './SaveProgressModal'
 import { ShareWordSheet } from './ShareWordSheet'
@@ -2177,6 +2178,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       ) : null}
 
       {/* Revision mode banner — shown after user picks a path at the gate */}
+      <SecuringCheckoutToast open={revisionHsk1CheckoutBusy} />
+
       {meta.revisionModePath && !conversionUnlockOpen && !hasActivatedHsk1(activatedDecks) ? (
         <div className="pointer-events-auto fixed left-0 right-0 top-[env(safe-area-inset-top,0px)] z-[80]">
           <RevisionModeBanner
@@ -2191,7 +2194,10 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
               if (revisionHsk1CheckoutBusy) return
               setRevisionHsk1CheckoutBusy(true)
               window.setTimeout(() => {
-                window.location.href = HSK1_CHECKOUT_URL
+                const opened = openHsk1Checkout()
+                if (opened) {
+                  window.setTimeout(() => setRevisionHsk1CheckoutBusy(false), 320)
+                }
               }, 50)
             }}
           />

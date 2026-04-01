@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { BUILTIN_CHINESE_CHARACTERS_1, type DeckInfo } from '../lib/deckService'
-import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
+import { openHsk1Checkout } from '../lib/hsk1Checkout'
+import { SecuringCheckoutToast } from './SecuringCheckoutToast'
 import {
   DECK_CATALOG,
   LOCKED_DECK_UNLOCK_HINT,
@@ -24,6 +25,7 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
   const builtinBar = catalogBarGradient('emerald')
 
   return (
+    <>
     <div className="mt-3 grid grid-cols-2 gap-3">
       <button
         type="button"
@@ -80,7 +82,10 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
             if (hsk1CheckoutBusy) return
             setHsk1CheckoutBusy(true)
             window.setTimeout(() => {
-              window.location.href = HSK1_CHECKOUT_URL
+              const opened = openHsk1Checkout()
+              if (opened) {
+                window.setTimeout(() => setHsk1CheckoutBusy(false), 320)
+              }
             }, 50)
             return
           }
@@ -155,11 +160,7 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
                 <div
                   className={`mt-0.5 text-[10px] leading-snug ${owned ? 'truncate text-white/60' : 'text-white/55'}`}
                 >
-                  {owned
-                    ? 'Tap for contents'
-                    : item.key === 'hsk-1' && hsk1CheckoutBusy
-                      ? 'Securing Checkout...'
-                      : LOCKED_DECK_UNLOCK_HINT}
+                  {owned ? 'Tap for contents' : LOCKED_DECK_UNLOCK_HINT}
                 </div>
               </>
             )}
@@ -194,5 +195,7 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
         )
       })}
     </div>
+    <SecuringCheckoutToast open={hsk1CheckoutBusy} />
+    </>
   )
 }

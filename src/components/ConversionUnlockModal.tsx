@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useState } from 'react'
-import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
+import { HSK1_CHECKOUT_URL, openHsk1Checkout } from '../lib/hsk1Checkout'
+import { SecuringCheckoutToast } from './SecuringCheckoutToast'
 
 /** Re-export for callers that import from the paywall module. */
 export { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
@@ -67,7 +68,10 @@ export function ConversionUnlockModal({
     setCheckoutBusy(true)
     onBuyNow()
     window.setTimeout(() => {
-      window.location.href = HSK1_CHECKOUT_URL
+      const opened = openHsk1Checkout()
+      if (opened) {
+        window.setTimeout(() => setCheckoutBusy(false), 320)
+      }
     }, 50)
   }, [onBuyNow, checkoutBusy])
 
@@ -78,6 +82,7 @@ export function ConversionUnlockModal({
     : `You've met ${uniqueCc1Seen} characters. Keep going \u2014 choose how:`
 
   return (
+    <>
     <AnimatePresence>
       {open ? (
         <motion.div
@@ -141,7 +146,7 @@ export function ConversionUnlockModal({
                     disabled={checkoutBusy}
                     className="mt-4 w-full rounded-2xl bg-amber-500 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(245,158,11,0.3)] transition-all hover:bg-amber-400 active:scale-[0.98] active:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    {checkoutBusy ? 'Securing Checkout...' : 'Buy now \u00b7 AUD $4.99'}
+                    Buy now \u00b7 AUD $4.99
                   </button>
                 </div>
 
@@ -209,5 +214,7 @@ export function ConversionUnlockModal({
         </motion.div>
       ) : null}
     </AnimatePresence>
+    <SecuringCheckoutToast open={checkoutBusy} />
+    </>
   )
 }

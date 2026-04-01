@@ -90,7 +90,7 @@ export function RevisionModeBanner({
               disabled={shopCheckoutBusy}
               className="shrink-0 text-xs font-semibold text-amber-300 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {shopCheckoutBusy ? 'Securing Checkout...' : 'Buy now \u2192'}
+              Buy now \u2192
             </button>
           </div>
         </div>
