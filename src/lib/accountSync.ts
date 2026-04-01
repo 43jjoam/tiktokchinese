@@ -646,16 +646,20 @@ async function finalizeCloudProfileSync(
   await ensureReferralCodePersistedToCloud(userId)
   void syncCc1SequenceFromCloud(getCc1WordIds())
 
+  console.log('[referral] finalizeCloudProfileSync: running applyPendingReferralAttribution')
   const referralAttributed = await applyPendingReferralAttribution(userId)
+  console.log('[referral] finalizeCloudProfileSync: referralAttributed =', referralAttributed)
   if (referralAttributed) {
     tryShowReferralWelcomeToast()
     const refUp = await uploadLearningProfileWithLocalMeta()
     if (!refUp.ok) {
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
     } else {
+      console.log('[referral] upload with referred_by succeeded, merging for bonus')
       void tryNotifyReferrerJoinEmail()
       // Pull server-applied bonus_cards_unlocked (+10 from trigger) back into local state
       await mergeRemoteProfileIfNewer(userId)
+      console.log('[referral] post-merge bonusCardsUnlocked =', loadPersistedState().meta.bonusCardsUnlocked)
     }
   }
 
