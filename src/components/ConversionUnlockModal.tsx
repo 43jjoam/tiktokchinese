@@ -1,10 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useState } from 'react'
-import {
-  CONVERSION_HSK1_TOTAL_VIDEOS_CHARS,
-  getCc1PoolSize,
-  getHsk1ShopUrl,
-} from '../lib/conversionUnlock'
+import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
+
+/** Re-export for callers that import from the paywall module. */
+export { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
 
 type Props = {
   open: boolean
@@ -36,9 +35,8 @@ export function ConversionUnlockModal({
   onCopyInvite,
   onRemindTomorrow,
 }: Props) {
-  const pool = getCc1PoolSize()
-  const shopUrl = getHsk1ShopUrl()
   const [inviteCopied, setInviteCopied] = useState(false)
+  const [checkoutBusy, setCheckoutBusy] = useState(false)
 
   const copyInvite = useCallback(async () => {
     const text = inviteUrl.trim() || window.location.origin + '/'
@@ -64,10 +62,14 @@ export function ConversionUnlockModal({
     onCopyInvite()
   }, [inviteUrl, onCopyInvite])
 
-  const openShop = useCallback(() => {
-    window.open(shopUrl, '_blank', 'noopener,noreferrer')
+  const goToHsk1Checkout = useCallback(() => {
+    if (checkoutBusy) return
+    setCheckoutBusy(true)
     onBuyNow()
-  }, [onBuyNow, shopUrl])
+    window.setTimeout(() => {
+      window.location.href = HSK1_CHECKOUT_URL
+    }, 50)
+  }, [onBuyNow, checkoutBusy])
 
   const headline = finalGateOnly
     ? "You've seen everything free. HSK 1 is next \u2014 AUD $4.99."
@@ -135,10 +137,11 @@ export function ConversionUnlockModal({
                   </div>
                   <button
                     type="button"
-                    onClick={openShop}
-                    className="mt-4 w-full rounded-2xl bg-amber-500 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(245,158,11,0.3)] transition-all hover:bg-amber-400 active:scale-[0.98] active:opacity-90"
+                    onClick={goToHsk1Checkout}
+                    disabled={checkoutBusy}
+                    className="mt-4 w-full rounded-2xl bg-amber-500 py-3 text-sm font-semibold text-white shadow-[0_4px_20px_rgba(245,158,11,0.3)] transition-all hover:bg-amber-400 active:scale-[0.98] active:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
                   >
-                    Buy now \u00b7 AUD $4.99
+                    {checkoutBusy ? 'Securing Checkout...' : 'Buy now \u00b7 AUD $4.99'}
                   </button>
                 </div>
 

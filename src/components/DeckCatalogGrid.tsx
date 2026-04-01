@@ -1,5 +1,6 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { BUILTIN_CHINESE_CHARACTERS_1, type DeckInfo } from '../lib/deckService'
+import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
 import {
   DECK_CATALOG,
   LOCKED_DECK_UNLOCK_HINT,
@@ -18,6 +19,7 @@ type Props = {
 }
 
 export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwnedDeck }: Props) {
+  const [hsk1CheckoutBusy, setHsk1CheckoutBusy] = useState(false)
   const builtin = BUILTIN_CHINESE_CHARACTERS_1
   const builtinBar = catalogBarGradient('emerald')
 
@@ -72,6 +74,14 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
           if (!canTap) return
           if (owned && matched) {
             onSelectOwnedDeck(matched)
+            return
+          }
+          if (item.key === 'hsk-1') {
+            if (hsk1CheckoutBusy) return
+            setHsk1CheckoutBusy(true)
+            window.setTimeout(() => {
+              window.location.href = HSK1_CHECKOUT_URL
+            }, 50)
             return
           }
           window.open(item.shopUrl, '_blank', 'noopener')
@@ -145,7 +155,11 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
                 <div
                   className={`mt-0.5 text-[10px] leading-snug ${owned ? 'truncate text-white/60' : 'text-white/55'}`}
                 >
-                  {owned ? 'Tap for contents' : LOCKED_DECK_UNLOCK_HINT}
+                  {owned
+                    ? 'Tap for contents'
+                    : item.key === 'hsk-1' && hsk1CheckoutBusy
+                      ? 'Securing Checkout...'
+                      : LOCKED_DECK_UNLOCK_HINT}
                 </div>
               </>
             )}
@@ -165,8 +179,15 @@ export default function DeckCatalogGrid({ decks, catalogCoverByKey, onSelectOwne
           )
         }
 
+        const hsk1Disabled = item.key === 'hsk-1' && hsk1CheckoutBusy
         return (
-          <button key={item.key} type="button" onClick={onActivate} className={cardClassName}>
+          <button
+            key={item.key}
+            type="button"
+            onClick={onActivate}
+            disabled={hsk1Disabled}
+            className={`${cardClassName}${hsk1Disabled ? ' cursor-not-allowed opacity-80' : ''}`}
+          >
             {coverBlock}
             {footerBlock}
           </button>

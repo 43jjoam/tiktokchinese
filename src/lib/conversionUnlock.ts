@@ -1,5 +1,6 @@
 import type { AppMeta } from './storage'
 import { DECK_CATALOG } from '../data/deckCatalog'
+import { HSK1_CHECKOUT_URL } from './hsk1Checkout'
 import type { DeckInfo } from './deckService'
 import { BUILTIN_CHINESE_CHARACTERS_1 } from './deckService'
 import { getWordsForDeck } from './deckWords'
@@ -29,8 +30,9 @@ export const CONVERSION_HSK1_TOTAL_VIDEOS_CHARS = 166
 
 const hsk1Catalog = DECK_CATALOG.find((c) => c.key === 'hsk-1')
 
+/** HSK 1 purchase URL — direct-to-checkout (Shopify payment step). */
 export function getHsk1ShopUrl(): string {
-  return hsk1Catalog?.shopUrl ?? 'https://bestling.net/products/hsk-1-digital-flashcards'
+  return HSK1_CHECKOUT_URL
 }
 
 /** Free Character 1 pool size (for “X of Y” style copy). */

@@ -431,7 +431,7 @@ export function EngagementWordPlayer({
     if (backendCountsOkRef.current) {
       setLikeCount((c) => (c != null ? c + 1 : c))
     }
-    void engagementSetLike(wordRef.current, true).then(() => refreshEngagement())
+    void engagementSetLike(wordRef.current, true)
   }
 
   const handleHeartToggle = useCallback(() => {
@@ -442,8 +442,8 @@ export function EngagementWordPlayer({
       setLikeCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
     }
     if (!was) triggerLikeBurst()
-    void engagementSetLike(wordRef.current, next).then(() => refreshEngagement())
-  }, [triggerLikeBurst, refreshEngagement])
+    void engagementSetLike(wordRef.current, next)
+  }, [triggerLikeBurst])
 
   const handleSaveToggle = useCallback(() => {
     const next = !savedRef.current
@@ -451,8 +451,8 @@ export function EngagementWordPlayer({
     if (backendCountsOkRef.current) {
       setSaveCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
     }
-    void engagementSetSave(wordRef.current, next).then(() => refreshEngagement())
-  }, [refreshEngagement])
+    void engagementSetSave(wordRef.current, next)
+  }, [])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)

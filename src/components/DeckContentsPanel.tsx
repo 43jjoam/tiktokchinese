@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import React, { useEffect, useMemo, useState } from 'react'
 import { PERSISTED_STATE_REPLACED_EVENT } from '../lib/accountSync'
+import { filterCc1WordsByQuota } from '../lib/characterSequence'
 import { bandDeckWordsByCubeTier } from '../lib/cubeVaultSort'
+import { BUILTIN_CHINESE_CHARACTERS_1 } from '../lib/deckService'
 import { getWordsForDeck } from '../lib/deckWords'
 import { prefetchLessonVideoSignedUrls } from '../lib/storageVideoUrl'
 import { loadPersistedState } from '../lib/storage'
@@ -20,9 +22,13 @@ type Props = {
   onBack: () => void
   /** Signed-in magic-link user — same as Profile vault player. */
   isSignedIn: boolean
+  /** CC1 only: user's personalised word-reveal sequence (array of word_ids). */
+  cc1Sequence?: string[]
+  /** CC1 only: number of characters within user's available quota. */
+  cc1Quota?: number
 }
 
-export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
+export default function DeckContentsPanel({ deck, onBack, isSignedIn, cc1Sequence, cc1Quota }: Props) {
   const [storageRev, setStorageRev] = useState(0)
   const [focusWord, setFocusWord] = useState<WordMetadata | null>(null)
 
@@ -38,7 +44,17 @@ export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
   }, [deck])
 
   const { wordStates } = useMemo(() => loadPersistedState(), [storageRev])
-  const words = useMemo(() => getWordsForDeck(deck), [deck])
+
+  const isCc1Deck = deck.id === BUILTIN_CHINESE_CHARACTERS_1.id
+
+  const words = useMemo(() => {
+    const all = getWordsForDeck(deck)
+    if (isCc1Deck && cc1Sequence && cc1Quota !== undefined) {
+      return filterCc1WordsByQuota(all, cc1Sequence, cc1Quota, wordStates as Record<string, WordState | undefined>)
+    }
+    return all
+  }, [deck, isCc1Deck, cc1Sequence, cc1Quota, wordStates])
+
   const bands = useMemo(() => bandDeckWordsByCubeTier(words, wordStates), [words, wordStates])
   const catalogEntry = useMemo(() => DECK_CATALOG.find((c) => c.matches(deck)), [deck])
   const deckProfileComingSoonLine = useMemo(() => {
@@ -86,7 +102,18 @@ export default function DeckContentsPanel({ deck, onBack, isSignedIn }: Props) {
               </svg>
               Back
             </button>
-            <h2 className="min-w-0 flex-1 truncate text-base font-bold text-white">{deck.name}</h2>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate text-base font-bold text-white">
+                {isCc1Deck && cc1Sequence && cc1Quota !== undefined
+                  ? `${words.length} characters`
+                  : deck.name}
+              </h2>
+              {isCc1Deck && cc1Sequence && cc1Quota !== undefined ? (
+                <p className="truncate text-[11px] text-amber-200/55">
+                  Your collection grows every day you return.
+                </p>
+              ) : null}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-24 pt-4">

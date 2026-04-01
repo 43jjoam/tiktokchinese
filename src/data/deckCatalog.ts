@@ -1,4 +1,5 @@
 import type { DeckInfo } from '../lib/deckService'
+import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
 
 /** Shown under locked deck art + footer; same for every unpurchased product deck. */
 export const LOCKED_DECK_UNLOCK_HINT =
@@ -94,7 +95,7 @@ export const DECK_CATALOG: CatalogDeck[] = [
     title: 'HSK 1 Digital Flashcards',
     lockOverlayTitle: 'HSK 1',
     subtitle: 'Unlock with your purchase code',
-    shopUrl: product('hsk-1-digital-flashcards'),
+    shopUrl: HSK1_CHECKOUT_URL,
     matches: (d) => d.id === CATALOG_DECK_IDS.hsk1 || matchHskLevel(d.name, 1),
     accent: 'emerald',
   },

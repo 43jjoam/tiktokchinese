@@ -6,6 +6,31 @@ export const REFERRAL_JOIN_TOAST_EVENT = 'tiktokchinese:referral-join-toast'
 export const REFERRAL_JOIN_TOAST_MESSAGE =
   'Your friend just joined \u2014 you both unlocked more cards. Keep going.'
 
+// ─── Referral welcome toast (invitee side) ───────────────────────────────────
+
+/** localStorage flag — set after the invitee welcome toast fires so it never repeats. */
+export const REFERRAL_WELCOME_TOAST_KEY = 'tiktokchinese_referral_welcome_shown'
+
+export const REFERRAL_WELCOME_TOAST_EVENT = 'tiktokchinese:referral-welcome-toast'
+
+export const REFERRAL_WELCOME_TOAST_MESSAGE =
+  'Welcome to ChineseFlash \u2014 your friend added 10 characters to your library as a gift.'
+
+/**
+ * After a successful referral attribution for the invitee, fire a one-time welcome toast.
+ * Guards against repeat shows via localStorage flag.
+ */
+export function tryShowReferralWelcomeToast(): void {
+  if (typeof window === 'undefined') return
+  try {
+    if (localStorage.getItem(REFERRAL_WELCOME_TOAST_KEY)) return
+    localStorage.setItem(REFERRAL_WELCOME_TOAST_KEY, 'true')
+    window.dispatchEvent(new CustomEvent(REFERRAL_WELCOME_TOAST_EVENT))
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * After merge updates `referralCount` from Supabase, show a toast when the count increased.
  * `prevCount` / `newCount` are from before/after this merge (avoids false positives on first

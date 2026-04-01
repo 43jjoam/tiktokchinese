@@ -7,9 +7,17 @@ type Props = {
   inviteUrl: string
   onCopyInvite: () => void
   onOpenShop: () => void
+  /** True while redirecting to Shopify checkout (same window). */
+  shopCheckoutBusy?: boolean
 }
 
-export function RevisionModeBanner({ path, inviteUrl, onCopyInvite, onOpenShop }: Props) {
+export function RevisionModeBanner({
+  path,
+  inviteUrl,
+  onCopyInvite,
+  onOpenShop,
+  shopCheckoutBusy = false,
+}: Props) {
   const copyInvite = useCallback(async () => {
     const text = inviteUrl.trim() || window.location.origin + '/'
     try {
@@ -79,9 +87,10 @@ export function RevisionModeBanner({ path, inviteUrl, onCopyInvite, onOpenShop }
             <button
               type="button"
               onClick={onOpenShop}
-              className="shrink-0 text-xs font-semibold text-amber-300 underline-offset-2 hover:underline"
+              disabled={shopCheckoutBusy}
+              className="shrink-0 text-xs font-semibold text-amber-300 underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Buy now \u2192
+              {shopCheckoutBusy ? 'Securing Checkout...' : 'Buy now \u2192'}
             </button>
           </div>
         </div>

@@ -1,5 +1,7 @@
-import { tryShowReferralJoinToast } from './referralJoinToast'
+import { tryShowReferralJoinToast, tryShowReferralWelcomeToast } from './referralJoinToast'
 import { applyPendingReferralAttribution } from './referralLanding'
+import { syncCc1SequenceFromCloud } from './characterSequence'
+import { getCc1WordIds } from './conversionUnlock'
 import { tryNotifyReferrerJoinEmail } from './notifyReferrerJoin'
 import { AUTH_CALLBACK_SEGMENT } from './authCallbackRoute'
 import { isRetryableSupabaseFailure, sleep } from './cloudRetries'
@@ -630,9 +632,11 @@ async function finalizeCloudProfileSync(
 ): Promise<SyncCloudProfileAfterAuthResult> {
   await restoreCloudDataToLocalAfterSignIn(userId)
   await ensureReferralCodePersistedToCloud(userId)
+  void syncCc1SequenceFromCloud(getCc1WordIds())
 
   const referralAttributed = await applyPendingReferralAttribution(userId)
   if (referralAttributed) {
+    tryShowReferralWelcomeToast()
     const refUp = await uploadLearningProfileWithLocalMeta()
     if (!refUp.ok) {
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)

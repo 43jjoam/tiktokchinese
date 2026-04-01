@@ -20,6 +20,7 @@ export const APP_EVENT = {
   REVISION_MODE_ENTERED: 'revision_mode_entered',
   REMINDER_EMAIL_SENT: 'reminder_email_sent',
   USER_RETURNED_AFTER_REMINDER: 'user_returned_after_reminder',
+  REFERRAL_WELCOME_SHOWN: 'referral_welcome_shown',
 } as const
 
 /**

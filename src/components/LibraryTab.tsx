@@ -1,10 +1,13 @@
 import { AnimatePresence } from 'framer-motion'
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { getAuthEmail } from '../lib/accountSync'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getAuthEmail, PERSISTED_STATE_REPLACED_EVENT } from '../lib/accountSync'
 import { APP_EVENT, logAppEvent } from '../lib/appEvents'
 import { fetchPublicCatalogCoverUrls } from '../lib/catalogCovers'
+import { ensureCc1Sequence, getAvailableQuota } from '../lib/characterSequence'
 import { activateCode, getActivatedDecks, getSupabaseClient, type DeckInfo } from '../lib/deckService'
 import { ACTIVATED_DECKS_CHANGED_EVENT } from '../lib/deckWords'
+import { getCc1WordIds } from '../lib/conversionUnlock'
+import { loadPersistedState } from '../lib/storage'
 import DeckCatalogGrid from './DeckCatalogGrid'
 import DeckContentsPanel from './DeckContentsPanel'
 
@@ -16,7 +19,19 @@ export default function LibraryTab() {
   const [openDeck, setOpenDeck] = useState<DeckInfo | null>(null)
   const [catalogCoverByKey, setCatalogCoverByKey] = useState<Record<string, string>>({})
   const [authEmail, setAuthEmail] = useState<string | null>(null)
+  const [storageRev, setStorageRev] = useState(0)
   const activatePendingRef = useRef(0)
+
+  useEffect(() => {
+    const bump = () => setStorageRev((n) => n + 1)
+    window.addEventListener(PERSISTED_STATE_REPLACED_EVENT, bump)
+    return () => window.removeEventListener(PERSISTED_STATE_REPLACED_EVENT, bump)
+  }, [])
+
+  const meta = useMemo(() => loadPersistedState().meta, [storageRev])
+  const cc1WordIds = useMemo(() => getCc1WordIds(), [])
+  const cc1Sequence = useMemo(() => ensureCc1Sequence(cc1WordIds), [cc1WordIds])
+  const cc1Quota = getAvailableQuota(meta)
 
   useEffect(() => {
     let cancelled = false
@@ -95,6 +110,8 @@ export default function LibraryTab() {
             deck={openDeck}
             onBack={() => setOpenDeck(null)}
             isSignedIn={Boolean(authEmail)}
+            cc1Sequence={cc1Sequence}
+            cc1Quota={cc1Quota}
           />
         )}
       </AnimatePresence>

@@ -80,6 +80,8 @@ import { applyPendingReferralAttribution, captureReferralFromUrl } from '../lib/
 import {
   REFERRAL_JOIN_TOAST_EVENT,
   REFERRAL_JOIN_TOAST_MESSAGE,
+  REFERRAL_WELCOME_TOAST_EVENT,
+  REFERRAL_WELCOME_TOAST_MESSAGE,
 } from '../lib/referralJoinToast'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
 import {
@@ -87,11 +89,11 @@ import {
   getCc1WordIds,
   getConversionUniqueCc1Threshold,
   getHardCapUniqueCc1,
-  getHsk1ShopUrl,
   hasActivatedHsk1,
   isFinalGateUniqueCc1,
   startOfNextLocalDayMs,
 } from '../lib/conversionUnlock'
+import { HSK1_CHECKOUT_URL } from '../lib/hsk1Checkout'
 import { ConversionUnlockModal } from './ConversionUnlockModal'
 import { RevisionModeBanner } from './RevisionModeBanner'
 import { SaveProgressModal } from './SaveProgressModal'
@@ -894,6 +896,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const [saveProgressForceLinkSent, setSaveProgressForceLinkSent] = useState(false)
   const [cloudSavedToast, setCloudSavedToast] = useState(false)
   const [referralJoinToast, setReferralJoinToast] = useState(false)
+  const [referralWelcomeToast, setReferralWelcomeToast] = useState(false)
   /** Shown when sign-in sync did not produce cloud profile data (or upload failed). */
   const [cloudBackupHint, setCloudBackupHint] = useState<string | null>(null)
   const [revisionUnlockedToast, setRevisionUnlockedToast] = useState(false)
@@ -938,6 +941,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   )
 
   const [conversionEligiblePoll, setConversionEligiblePoll] = useState(0)
+  const [revisionHsk1CheckoutBusy, setRevisionHsk1CheckoutBusy] = useState(false)
 
   /** Re-evaluate eligibility when “eligible after” timestamp passes (e.g. next local day). */
   useEffect(() => {
@@ -1197,6 +1201,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     }
     window.addEventListener(REFERRAL_JOIN_TOAST_EVENT, onReferralJoin)
     return () => window.removeEventListener(REFERRAL_JOIN_TOAST_EVENT, onReferralJoin)
+  }, [])
+
+  useEffect(() => {
+    const onReferralWelcome = () => {
+      logAppEvent(APP_EVENT.REFERRAL_WELCOME_SHOWN, {})
+      setReferralWelcomeToast(true)
+      window.setTimeout(() => setReferralWelcomeToast(false), 5000)
+    }
+    window.addEventListener(REFERRAL_WELCOME_TOAST_EVENT, onReferralWelcome)
+    return () => window.removeEventListener(REFERRAL_WELCOME_TOAST_EVENT, onReferralWelcome)
   }, [])
 
   useEffect(() => {
@@ -1934,7 +1948,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (backendCountsOkRef.current) {
       setLikeCount((c) => (c != null ? c + 1 : c))
     }
-    void engagementSetLike(currentWordRef.current, true).then(() => refreshEngagement())
+    void engagementSetLike(currentWordRef.current, true)
   }
 
   const handleHeartToggle = useCallback(() => {
@@ -1945,8 +1959,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       setLikeCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
     }
     if (!wasLiked) triggerLikeBurst()
-    void engagementSetLike(currentWordRef.current, next).then(() => refreshEngagement())
-  }, [triggerLikeBurst, refreshEngagement])
+    void engagementSetLike(currentWordRef.current, next)
+  }, [triggerLikeBurst])
 
   const handleSaveToggle = useCallback(() => {
     const next = !savedRef.current
@@ -1954,8 +1968,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     if (backendCountsOkRef.current) {
       setSaveCount((c) => (c != null ? (next ? c + 1 : Math.max(0, c - 1)) : c))
     }
-    void engagementSetSave(currentWordRef.current, next).then(() => refreshEngagement())
-  }, [refreshEngagement])
+    void engagementSetSave(currentWordRef.current, next)
+  }, [])
 
   const handleTapGesture = useCallback((loopsElapsed: number) => {
     recordTap(loopsElapsed)
@@ -2171,9 +2185,14 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
             onCopyInvite={() => {
               logAppEvent(APP_EVENT.INVITE_LINK_COPIED, { method: 'unlock_screen' })
             }}
+            shopCheckoutBusy={revisionHsk1CheckoutBusy}
             onOpenShop={() => {
               logAppEvent(APP_EVENT.BUY_BUTTON_TAPPED)
-              window.open(getHsk1ShopUrl(), '_blank', 'noopener,noreferrer')
+              if (revisionHsk1CheckoutBusy) return
+              setRevisionHsk1CheckoutBusy(true)
+              window.setTimeout(() => {
+                window.location.href = HSK1_CHECKOUT_URL
+              }, 50)
             }}
           />
         </div>
@@ -2562,7 +2581,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
       <SaveProgressModal
         open={saveProgressOpen}
         welcomeBack={saveProgressWelcomeBack}
-        sessionsCompleted={meta.sessionsServed}
+        moment={((meta.accountSaveNotNowCount ?? 0) >= 2 ? 3 : (meta.accountSaveNotNowCount ?? 0) >= 1 ? 2 : 1) as 1 | 2 | 3}
+        uniqueCharsSeen={meta.first20Seen}
         initialEmail={getLastUsedAccountEmail() ?? ''}
         allowNotNow={(meta.accountSaveNotNowCount ?? 0) < 2}
         forceLinkSentStep={saveProgressForceLinkSent}
@@ -2623,6 +2643,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[57] w-[min(92vw,22rem)] -translate-x-1/2 rounded-2xl border border-emerald-400/35 bg-emerald-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-emerald-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-emerald-400/20 backdrop-blur-sm"
         >
           {REFERRAL_JOIN_TOAST_MESSAGE}
+        </div>
+      ) : null}
+
+      {referralWelcomeToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[57] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-sky-400/35 bg-sky-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-sky-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-sky-400/20 backdrop-blur-sm"
+        >
+          {REFERRAL_WELCOME_TOAST_MESSAGE}
         </div>
       ) : null}
 

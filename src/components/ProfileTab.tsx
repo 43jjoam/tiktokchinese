@@ -8,6 +8,8 @@ import {
   setLastUsedAccountEmail,
 } from '../lib/accountSync'
 import { APP_EVENT, logAppEvent } from '../lib/appEvents'
+import { ensureCc1Sequence, filterCc1WordsByQuota, getAvailableQuota } from '../lib/characterSequence'
+import { getCc1WordIds } from '../lib/conversionUnlock'
 import { getActivatedDecks, getSupabaseClient } from '../lib/deckService'
 import { loadPersistedState, type AppMeta } from '../lib/storage'
 import { ACTIVATED_DECKS_CHANGED_EVENT, buildHomeFeedWords } from '../lib/deckWords'
@@ -499,6 +501,8 @@ export default function ProfileTab() {
   }, [authEmail, storageRev])
 
   const persisted = useMemo(() => loadPersistedState(), [storageRev, engagementRev])
+  const cc1WordIds = useMemo(() => getCc1WordIds(), [])
+  const cc1Sequence = useMemo(() => ensureCc1Sequence(cc1WordIds), [cc1WordIds])
   const [profileInviteCopied, setProfileInviteCopied] = useState(false)
 
   const handleProfileInvite = useCallback(async () => {
@@ -541,9 +545,21 @@ export default function ProfileTab() {
     window.setTimeout(() => setProfileInviteCopied(false), 2000)
   }, [persisted.meta.referralCode])
   const ws = persisted.wordStates
-  const charWords = feedWordList.filter((w) => getWordContentKind(w) === 'character')
-  const vocabWords = feedWordList.filter((w) => getWordContentKind(w) === 'vocabulary')
-  const grammarWords = feedWordList.filter((w) => getWordContentKind(w) === 'grammar')
+
+  // Build a quota-filtered word list for Progress stats and Word Types.
+  // Only CC1 free-deck characters are filtered; purchased deck words are unaffected.
+  const statsFeedWordList = useMemo(() => {
+    const availableQuota = getAvailableQuota(persisted.meta)
+    const cc1IdSet = new Set(cc1WordIds)
+    const cc1Words = feedWordList.filter((w) => cc1IdSet.has(w.word_id))
+    const nonCc1Words = feedWordList.filter((w) => !cc1IdSet.has(w.word_id))
+    const filteredCc1 = filterCc1WordsByQuota(cc1Words, cc1Sequence, availableQuota, ws)
+    return [...filteredCc1, ...nonCc1Words]
+  }, [feedWordList, cc1WordIds, cc1Sequence, persisted.meta, ws])
+
+  const charWords = statsFeedWordList.filter((w) => getWordContentKind(w) === 'character')
+  const vocabWords = statsFeedWordList.filter((w) => getWordContentKind(w) === 'vocabulary')
+  const grammarWords = statsFeedWordList.filter((w) => getWordContentKind(w) === 'grammar')
   const byKind = {
     character: bucketByProgress(charWords, ws),
     vocabulary: bucketByProgress(vocabWords, ws),
@@ -700,6 +716,11 @@ export default function ProfileTab() {
           {persisted.meta.referralCode?.trim() ? (
             <p className="text-[11px] text-white/35">
               Your code: {persisted.meta.referralCode.trim().toUpperCase()}
+            </p>
+          ) : null}
+          {persisted.meta.bonusCardsUnlocked && persisted.meta.bonusCardsUnlocked > 0 && persisted.meta.referredByUserId?.trim() ? (
+            <p className="text-[11px] text-white/35">
+              {persisted.meta.bonusCardsUnlocked} bonus characters from a friend&apos;s invite
             </p>
           ) : null}
         </div>
@@ -882,7 +903,7 @@ export default function ProfileTab() {
         {montessoriGrammarOpen ? (
           <GrammarColorsMontessoriPage
             key="montessori-grammar"
-            feedWordList={feedWordList}
+            feedWordList={statsFeedWordList}
             wordStates={ws}
             onPickVaultWord={(word, browseList) => setGrammarVault({ word, browseList })}
             onBack={() => {

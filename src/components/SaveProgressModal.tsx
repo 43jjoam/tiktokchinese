@@ -5,15 +5,22 @@ import { isValidEmail } from '../lib/emailValidation'
 
 type Props = {
   open: boolean
-  /** “Welcome back” copy when we already know their email (e.g. last session). */
+  /** "Welcome back" copy when we already know their email (e.g. last session). */
   welcomeBack?: boolean
-  /** Completed learning swipes (increments each finalized swipe — matches prompt milestones). */
-  sessionsCompleted: number
-  /** When opening “use another email”, leave empty; otherwise optional pre-fill */
+  /**
+   * Which sign-in moment:
+   *   1 = swipe 10 soft nudge ("Enjoying it so far?")
+   *   2 = swipe 15 soft nudge ("You are making progress")
+   *   3 = swipe 20 hard gate ("You've met X characters")
+   */
+  moment?: 1 | 2 | 3
+  /** Unique characters seen — used in moment 3 headline. */
+  uniqueCharsSeen?: number
+  /** When opening "use another email", leave empty; otherwise optional pre-fill */
   initialEmail?: string
   /** Third prompt: user must enter email (no snooze). */
   allowNotNow?: boolean
-  /** Open directly on the “link sent” step (e.g. guest hit swipe cap with link already sent). */
+  /** Open directly on the "link sent" step (e.g. guest hit swipe cap with link already sent). */
   forceLinkSentStep?: boolean
   /**
    * When true on the link-sent step: no backdrop dismiss, no OK dismiss — user must open the magic link.
@@ -30,7 +37,8 @@ type Props = {
 export function SaveProgressModal({
   open,
   welcomeBack = false,
-  sessionsCompleted,
+  moment = 1,
+  uniqueCharsSeen = 0,
   initialEmail = '',
   allowNotNow = true,
   forceLinkSentStep = false,
@@ -129,7 +137,7 @@ export function SaveProgressModal({
     setResendOkFlash(false)
     const to = magicLinkTargetEmail.toLowerCase()
     if (!to || !to.includes('@')) {
-      setResendError('We couldn’t find the email you used. Please contact support if you’re stuck.')
+      setResendError('We couldn\u2019t find the email you used. Please contact support if you\u2019re stuck.')
       return
     }
     if (Date.now() < resendCooldownUntil) return
@@ -162,6 +170,22 @@ export function SaveProgressModal({
     window.addEventListener('keydown', onKeyDown, true)
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [open, backdropDismissible, sent, onAcknowledgeLinkSent, onDismissWithoutAccount])
+
+  const headline = welcomeBack
+    ? 'Welcome back!'
+    : moment === 3
+    ? `You\u2019ve met ${uniqueCharsSeen} characters`
+    : moment === 2
+    ? 'You are making progress'
+    : 'Enjoying it so far?'
+
+  const bodyText = welcomeBack
+    ? 'Please enter your email address to continue from last time.'
+    : moment === 3
+    ? 'Sign in to save your progress and keep going. Takes 10 seconds.'
+    : moment === 2
+    ? 'Sign in to make sure you do not lose it.'
+    : 'Sign in to save the characters you are meeting and keep your streak across devices.'
 
   return (
     <AnimatePresence>
@@ -216,26 +240,11 @@ export function SaveProgressModal({
                   transition={{ duration: 0.2 }}
                 >
                   <h2 id="save-progress-title" className="text-center text-lg font-bold leading-snug text-white">
-                    {welcomeBack ? 'Welcome back!' : 'Keep your progress'}
+                    {headline}
                   </h2>
-                  {welcomeBack ? (
-                    <p className="mt-3 text-center text-sm leading-relaxed text-white/80">
-                      Please enter your email address to continue from last time.
-                    </p>
-                  ) : (
-                    <>
-                      <p className="mt-3 text-center text-sm leading-relaxed text-white/80">
-                        You&apos;ve already completed{' '}
-                        <span className="font-semibold text-white">{sessionsCompleted}</span> learning swipe
-                        {sessionsCompleted === 1 ? '' : 's'}! Sign in or create an account to preserve your progress.
-                      </p>
-                      {!allowNotNow ? (
-                        <p className="mt-2 text-center text-xs font-medium leading-snug text-amber-200/90">
-                          Please add your email to continue.
-                        </p>
-                      ) : null}
-                    </>
-                  )}
+                  <p className="mt-3 text-center text-sm leading-relaxed text-white/80">
+                    {bodyText}
+                  </p>
                   <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-white/45">
                     Email
                   </label>
@@ -268,7 +277,7 @@ export function SaveProgressModal({
                     onClick={() => void submit()}
                     className="mt-5 w-full rounded-xl bg-white py-3.5 text-sm font-bold text-zinc-950 transition-opacity disabled:opacity-50"
                   >
-                    {busy ? 'Sending…' : welcomeBack ? 'Continue the journey' : 'Preserve my progress'}
+                    {busy ? 'Sending\u2026' : welcomeBack ? 'Continue the journey' : 'Send me a sign-in link'}
                   </button>
                   {allowNotNow && !welcomeBack ? (
                     <button
@@ -321,13 +330,13 @@ export function SaveProgressModal({
                         className="mt-5 w-full rounded-xl border border-white/25 bg-white/10 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
                       >
                         {resendBusy
-                          ? 'Sending…'
+                          ? 'Sending\u2026'
                           : resendSecondsLeft > 0
                             ? `Resend link (${resendSecondsLeft}s)`
                             : 'Resend link'}
                       </button>
                       <p className="mt-4 text-center text-xs leading-relaxed text-white/50">
-                        Emails can take a few minutes—check spam or promotions.
+                        Emails can take a few minutes\u2014check spam or promotions.
                       </p>
                     </>
                   ) : (
@@ -344,8 +353,7 @@ export function SaveProgressModal({
                         </p>
                       ) : (
                         <p className="mt-3 text-center text-sm leading-relaxed text-white/80">
-                          We&apos;ve sent you a link to preserve your progress. Enter through the link and continue your
-                          Chinese master journey.
+                          We&apos;ve sent you a link. Enter through the link and continue your journey.
                         </p>
                       )}
                       <button
