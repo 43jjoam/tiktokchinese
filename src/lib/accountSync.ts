@@ -870,11 +870,15 @@ export async function mergeRemoteProfileIfNewer(expectedUserId: string): Promise
 
   const prev = local.meta.lastMergedRemoteUpdatedAt ?? ''
   const boundUid = local.meta.lastCloudProfileUserId
-  if (prev && boundUid === expectedUserId && remoteIsNotNewerThanCursor(remote.updated_at, prev)) {
-    return false
-  }
+  const payloadIsStale =
+    !!prev && boundUid === expectedUserId && remoteIsNotNewerThanCursor(remote.updated_at, prev)
 
-  applyProfilePayload(remote.payload)
+  if (!payloadIsStale) {
+    applyProfilePayload(remote.payload)
+  }
+  // Always apply DB columns — server-authoritative fields (referral_code, bonus_cards_unlocked,
+  // etc.) may be updated by triggers without bumping updated_at, so the cursor check must not
+  // gate them.
   applyRemoteProfileDbColumnsToLocal(remote.stats, remote.referral)
   const next = loadPersistedState()
   savePersistedState({

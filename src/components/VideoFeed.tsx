@@ -76,11 +76,12 @@ import {
 } from '../lib/accountSync'
 import { APP_EVENT, logAppEvent } from '../lib/appEvents'
 import { tryNotifyReferrerJoinEmail } from '../lib/notifyReferrerJoin'
-import { applyPendingReferralAttribution, captureReferralFromUrl } from '../lib/referralLanding'
+import { applyPendingReferralAttribution, captureReferralFromUrl, getPendingReferralCode } from '../lib/referralLanding'
 import {
   consumeReferralWelcomeToastPending,
   REFERRAL_JOIN_TOAST_EVENT,
   REFERRAL_JOIN_TOAST_MESSAGE,
+  REFERRAL_PRE_LOGIN_TOAST_MESSAGE,
   REFERRAL_WELCOME_TOAST_EVENT,
   REFERRAL_WELCOME_TOAST_MESSAGE,
   REFERRAL_WELCOME_TOAST_KEY,
@@ -862,7 +863,12 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [])
 
   useEffect(() => {
+    const hadRefParam = new URLSearchParams(window.location.search).has('ref')
     captureReferralFromUrl()
+    if (hadRefParam && getPendingReferralCode()) {
+      setReferralPreLoginToast(true)
+      window.setTimeout(() => setReferralPreLoginToast(false), 6000)
+    }
   }, [])
 
   const prefetchBootPath = useMemo(() => {
@@ -900,6 +906,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   const [cloudSavedToast, setCloudSavedToast] = useState(false)
   const [referralJoinToast, setReferralJoinToast] = useState(false)
   const [referralWelcomeToast, setReferralWelcomeToast] = useState(false)
+  const [referralPreLoginToast, setReferralPreLoginToast] = useState(false)
   /** Shown when sign-in sync did not produce cloud profile data (or upload failed). */
   const [cloudBackupHint, setCloudBackupHint] = useState<string | null>(null)
   const [revisionUnlockedToast, setRevisionUnlockedToast] = useState(false)
@@ -974,6 +981,7 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     const user = session.user
     if (!user?.id) return
     captureReferralFromUrl()
+    setReferralPreLoginToast(false)
     stripSupabaseOAuthParamsFromUrl()
     if (user.email) setLastUsedAccountEmail(user.email)
     setCloudBackupHint(null)
@@ -2667,6 +2675,16 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
           className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[57] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-sky-400/35 bg-sky-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-sky-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-sky-400/20 backdrop-blur-sm"
         >
           {REFERRAL_WELCOME_TOAST_MESSAGE}
+        </div>
+      ) : null}
+
+      {referralPreLoginToast ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[57] w-[min(92vw,24rem)] -translate-x-1/2 rounded-2xl border border-sky-400/35 bg-sky-950/95 px-4 py-3 text-center text-sm font-semibold leading-snug text-sky-50 shadow-[0_12px_40px_rgba(0,0,0,0.5)] ring-1 ring-sky-400/20 backdrop-blur-sm"
+        >
+          {REFERRAL_PRE_LOGIN_TOAST_MESSAGE}
         </div>
       ) : null}
 

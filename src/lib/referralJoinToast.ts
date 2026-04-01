@@ -6,6 +6,11 @@ export const REFERRAL_JOIN_TOAST_EVENT = 'tiktokchinese:referral-join-toast'
 export const REFERRAL_JOIN_TOAST_MESSAGE =
   'Your friend just joined \u2014 you both unlocked more cards. Keep going.'
 
+// ─── Pre-login referral toast (invitee side, before sign-in) ─────────────────
+
+export const REFERRAL_PRE_LOGIN_TOAST_MESSAGE =
+  'Your friend gifted you 10 characters \u2014 sign in to claim them.'
+
 // ─── Referral welcome toast (invitee side) ───────────────────────────────────
 
 /** localStorage flag — set after the invitee welcome toast fires so it never repeats. */
