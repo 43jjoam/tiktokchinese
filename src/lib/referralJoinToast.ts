@@ -11,23 +11,51 @@ export const REFERRAL_JOIN_TOAST_MESSAGE =
 /** localStorage flag — set after the invitee welcome toast fires so it never repeats. */
 export const REFERRAL_WELCOME_TOAST_KEY = 'tiktokchinese_referral_welcome_shown'
 
+/**
+ * Pending flag — set when attribution happens; consumed by VideoFeed on mount.
+ * Survives the auth redirect so the toast still fires even if VideoFeed wasn't
+ * mounted yet when tryShowReferralWelcomeToast() was first called.
+ */
+export const REFERRAL_WELCOME_TOAST_PENDING_KEY = 'tiktokchinese_referral_welcome_pending'
+
 export const REFERRAL_WELCOME_TOAST_EVENT = 'tiktokchinese:referral-welcome-toast'
 
 export const REFERRAL_WELCOME_TOAST_MESSAGE =
   'Welcome to ChineseFlash \u2014 your friend added 10 characters to your library as a gift.'
 
 /**
- * After a successful referral attribution for the invitee, fire a one-time welcome toast.
- * Guards against repeat shows via localStorage flag.
+ * After a successful referral attribution for the invitee, schedule a one-time welcome toast.
+ * Sets a pending flag so VideoFeed can show it on mount even if this runs before the component
+ * is listening (e.g. during the auth redirect). Also dispatches the event immediately in case
+ * VideoFeed is already mounted.
  */
 export function tryShowReferralWelcomeToast(): void {
   if (typeof window === 'undefined') return
   try {
     if (localStorage.getItem(REFERRAL_WELCOME_TOAST_KEY)) return
-    localStorage.setItem(REFERRAL_WELCOME_TOAST_KEY, 'true')
+    localStorage.setItem(REFERRAL_WELCOME_TOAST_PENDING_KEY, 'true')
     window.dispatchEvent(new CustomEvent(REFERRAL_WELCOME_TOAST_EVENT))
   } catch {
     /* ignore */
+  }
+}
+
+/**
+ * Called by VideoFeed on mount. If a pending welcome toast is waiting, marks it as shown
+ * and returns true so the component can display it.
+ */
+export function consumeReferralWelcomeToastPending(): boolean {
+  try {
+    if (!localStorage.getItem(REFERRAL_WELCOME_TOAST_PENDING_KEY)) return false
+    if (localStorage.getItem(REFERRAL_WELCOME_TOAST_KEY)) {
+      localStorage.removeItem(REFERRAL_WELCOME_TOAST_PENDING_KEY)
+      return false
+    }
+    localStorage.removeItem(REFERRAL_WELCOME_TOAST_PENDING_KEY)
+    localStorage.setItem(REFERRAL_WELCOME_TOAST_KEY, 'true')
+    return true
+  } catch {
+    return false
   }
 }
 

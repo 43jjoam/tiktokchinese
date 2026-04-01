@@ -642,6 +642,8 @@ async function finalizeCloudProfileSync(
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
     } else {
       void tryNotifyReferrerJoinEmail()
+      // Pull server-applied bonus_cards_unlocked (+10 from trigger) back into local state
+      await mergeRemoteProfileIfNewer(userId)
     }
   }
 

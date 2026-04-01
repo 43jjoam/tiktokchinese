@@ -78,10 +78,12 @@ import { APP_EVENT, logAppEvent } from '../lib/appEvents'
 import { tryNotifyReferrerJoinEmail } from '../lib/notifyReferrerJoin'
 import { applyPendingReferralAttribution, captureReferralFromUrl } from '../lib/referralLanding'
 import {
+  consumeReferralWelcomeToastPending,
   REFERRAL_JOIN_TOAST_EVENT,
   REFERRAL_JOIN_TOAST_MESSAGE,
   REFERRAL_WELCOME_TOAST_EVENT,
   REFERRAL_WELCOME_TOAST_MESSAGE,
+  REFERRAL_WELCOME_TOAST_KEY,
 } from '../lib/referralJoinToast'
 import { MeaningTapOverlayCard } from './MeaningTapOverlay'
 import {
@@ -1205,11 +1207,17 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
   }, [])
 
   useEffect(() => {
-    const onReferralWelcome = () => {
+    const showWelcomeToast = () => {
+      try { localStorage.setItem(REFERRAL_WELCOME_TOAST_KEY, 'true') } catch { /* ignore */ }
       logAppEvent(APP_EVENT.REFERRAL_WELCOME_SHOWN, {})
       setReferralWelcomeToast(true)
       window.setTimeout(() => setReferralWelcomeToast(false), 5000)
     }
+    // Consume any pending toast that was set before this component mounted (e.g. during auth redirect)
+    if (consumeReferralWelcomeToastPending()) {
+      showWelcomeToast()
+    }
+    const onReferralWelcome = () => showWelcomeToast()
     window.addEventListener(REFERRAL_WELCOME_TOAST_EVENT, onReferralWelcome)
     return () => window.removeEventListener(REFERRAL_WELCOME_TOAST_EVENT, onReferralWelcome)
   }, [])
