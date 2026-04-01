@@ -1,5 +1,5 @@
 import { tryShowReferralJoinToast, tryShowReferralWelcomeToast } from './referralJoinToast'
-import { applyPendingReferralAttribution } from './referralLanding'
+import { applyPendingReferralAttribution, getPendingReferralCode } from './referralLanding'
 import { syncCc1SequenceFromCloud } from './characterSequence'
 import { getCc1WordIds } from './conversionUnlock'
 import { tryNotifyReferrerJoinEmail } from './notifyReferrerJoin'
@@ -359,7 +359,19 @@ export async function sendMagicLink(
   if (!trimmed || !trimmed.includes('@')) {
     return { ok: false, message: 'Enter a valid email address.' }
   }
-  const redirect = getMagicLinkRedirectUrl()
+  // Embed any pending referral code in the redirect URL so the magic link
+  // carries it to whichever device the user clicks it on.
+  let redirect = getMagicLinkRedirectUrl()
+  const pendingRef = getPendingReferralCode()
+  if (redirect && pendingRef) {
+    try {
+      const u = new URL(redirect)
+      u.searchParams.set('ref', pendingRef)
+      redirect = u.toString()
+    } catch {
+      /* keep original redirect if URL parse fails */
+    }
+  }
   const { error } = await supabase.auth.signInWithOtp({
     email: trimmed,
     options: {
