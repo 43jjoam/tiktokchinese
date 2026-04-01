@@ -75,8 +75,7 @@ import {
   userFacingProfileUploadError,
 } from '../lib/accountSync'
 import { APP_EVENT, logAppEvent } from '../lib/appEvents'
-import { tryNotifyReferrerJoinEmail } from '../lib/notifyReferrerJoin'
-import { applyPendingReferralAttribution, captureReferralFromUrl, getPendingReferralCode } from '../lib/referralLanding'
+import { captureReferralFromUrl, getPendingReferralCode } from '../lib/referralLanding'
 import {
   consumeReferralWelcomeToastPending,
   REFERRAL_JOIN_TOAST_EVENT,
@@ -1017,18 +1016,8 @@ export default function VideoFeed({ keyboardShortcutsActive = true }: VideoFeedP
     }
   }, [])
 
-  useEffect(() => {
-    if (!signedInUserId) return
-    void (async () => {
-      const attributed = await applyPendingReferralAttribution(signedInUserId)
-      if (!attributed) return
-      const up = await uploadLearningProfileWithLocalMeta()
-      if (up.ok) {
-        setProfileUploadDoneUserId(signedInUserId)
-        void tryNotifyReferrerJoinEmail()
-      }
-    })()
-  }, [signedInUserId])
+  // Referral attribution is handled inside finalizeCloudProfileSync (accountSync.ts),
+  // which runs after the initial upload/merge and includes the toast + bonus merge.
 
   useEffect(() => {
     if (!signedInUserId) return
