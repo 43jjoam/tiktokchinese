@@ -653,16 +653,12 @@ async function finalizeCloudProfileSync(
   await ensureReferralCodePersistedToCloud(userId)
   void syncCc1SequenceFromCloud(getCc1WordIds())
 
-  console.log('[referral] finalizeCloudProfileSync: running applyPendingReferralAttribution')
   const referralAttributed = await applyPendingReferralAttribution(userId)
-  console.log('[referral] finalizeCloudProfileSync: referralAttributed =', referralAttributed)
   if (referralAttributed) {
     tryShowReferralWelcomeToast()
     const refUp = await uploadLearningProfileWithLocalMeta()
     if (!refUp.ok) {
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
-    } else {
-      console.log('[referral] upload with referred_by succeeded, updated_at =', refUp.updated_at)
     }
     // Always merge regardless of upload result — the DB trigger fires on UPDATE even if
     // PostgREST's RETURNING clause returns 0 rows (RLS filtering), so bonus_cards_unlocked
@@ -670,9 +666,7 @@ async function finalizeCloudProfileSync(
     // Wait briefly to let the DB commit propagate before fetching.
     await sleep(300)
     void tryNotifyReferrerJoinEmail()
-    const merged = await mergeRemoteProfileIfNewer(userId)
-    const afterMerge = loadPersistedState().meta
-    console.log('[referral] post-merge merged =', merged, 'bonusCardsUnlocked =', afterMerge.bonusCardsUnlocked, 'referralBonusApplied =', afterMerge.referralBonusApplied, 'referredByUserId =', afterMerge.referredByUserId)
+    await mergeRemoteProfileIfNewer(userId)
   }
 
   let remoteRow = await fetchRemoteLearningProfile()

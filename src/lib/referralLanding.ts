@@ -66,14 +66,12 @@ export function captureReferralFromUrl(): void {
 
 function persistReferredByUserId(referrerId: string, userId: string): boolean {
   if (referrerId === userId) {
-    console.log('[referral] persistReferredBy: self-referral, referrerId === userId', referrerId)
     clearPendingReferralCode()
     return false
   }
 
   const next = loadPersistedState()
   if (next.meta.referredByUserId?.trim()) {
-    console.log('[referral] persistReferredBy: already attributed in local state', next.meta.referredByUserId)
     clearPendingReferralCode()
     return false
   }
@@ -125,29 +123,23 @@ async function fetchReferrerIdForCode(code: string): Promise<
  */
 export async function applyPendingReferralAttribution(userId: string): Promise<boolean> {
   const supabase = getSupabaseClient()
-  if (!supabase) { console.log('[referral] applyPending: no supabase'); return false }
+  if (!supabase) return false
 
   const prev = loadPersistedState()
   if (prev.meta.referredByUserId?.trim()) {
-    console.log('[referral] applyPending: already attributed', prev.meta.referredByUserId)
     clearPendingReferralCode()
     return false
   }
 
   const pending = getPendingReferralCode()
-  console.log('[referral] applyPending: pending code =', pending)
   if (!pending) return false
 
   const {
     data: { session },
   } = await supabase.auth.getSession()
-  if (!session?.user?.id || session.user.id !== userId) {
-    console.log('[referral] applyPending: session mismatch', session?.user?.id, userId)
-    return false
-  }
+  if (!session?.user?.id || session.user.id !== userId) return false
 
   const resolved = await fetchReferrerIdForCode(pending)
-  console.log('[referral] applyPending: resolved =', JSON.stringify(resolved), 'userId =', userId)
   if (!resolved.ok) {
     if (resolved.reason === 'not_found') clearPendingReferralCode()
     return false
