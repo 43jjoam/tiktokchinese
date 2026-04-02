@@ -138,9 +138,13 @@ export function weightedShuffleIds(ids: string[], getWeight: (id: string) => num
 /**
  * Available free CC1 character quota:
  * 20 (base) + bonus_cards_unlocked (referral/server bonus) + streak_bonus_cards (local streak bonus).
+ * If the user was referred but the server bonus hasn't synced yet, +10 is applied optimistically.
  */
 export function getAvailableQuota(meta: AppMeta): number {
-  return 20 + (meta.bonusCardsUnlocked ?? 0) + (meta.streakBonusCards ?? 0)
+  const serverBonus = meta.bonusCardsUnlocked ?? 0
+  // Optimistic fallback: referral attribution happened locally but server bonus not yet merged.
+  const referralFallback = serverBonus === 0 && meta.referredByUserId?.trim() ? 10 : 0
+  return 20 + Math.max(serverBonus, referralFallback) + (meta.streakBonusCards ?? 0)
 }
 
 // ─── localStorage persistence ─────────────────────────────────────────────────

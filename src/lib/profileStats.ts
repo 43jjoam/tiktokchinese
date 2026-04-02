@@ -39,11 +39,17 @@ export function remoteStatsFromDbRow(row: StatsRow | null | undefined): RemotePr
 /** Columns for PostgREST `upsert` on `user_learning_profiles`. */
 export function profileStatsColumnsForUpsert(meta: AppMeta): StatsRow {
   const d = meta.lastActiveDate
-  return {
+  const row: StatsRow = {
     last_active_date:
       typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null,
     current_streak: meta.currentStreak ?? 0,
     total_days_active: meta.totalDaysActive ?? 0,
-    bonus_cards_unlocked: meta.bonusCardsUnlocked ?? 0,
   }
+  // Omit bonus_cards_unlocked when a referral bonus is pending (referred but not yet confirmed).
+  // Sending 0 here would overwrite the DB trigger's +10 before the merge can pull it back.
+  const referralPending = meta.referredByUserId?.trim() && !meta.referralBonusApplied
+  if (!referralPending) {
+    row.bonus_cards_unlocked = meta.bonusCardsUnlocked ?? 0
+  }
+  return row
 }
