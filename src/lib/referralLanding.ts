@@ -66,12 +66,14 @@ export function captureReferralFromUrl(): void {
 
 function persistReferredByUserId(referrerId: string, userId: string): boolean {
   if (referrerId === userId) {
+    console.log('[referral] persistReferredBy: self-referral, referrerId === userId', referrerId)
     clearPendingReferralCode()
     return false
   }
 
   const next = loadPersistedState()
   if (next.meta.referredByUserId?.trim()) {
+    console.log('[referral] persistReferredBy: already attributed in local state', next.meta.referredByUserId)
     clearPendingReferralCode()
     return false
   }
@@ -145,7 +147,7 @@ export async function applyPendingReferralAttribution(userId: string): Promise<b
   }
 
   const resolved = await fetchReferrerIdForCode(pending)
-  console.log('[referral] applyPending: resolved =', resolved)
+  console.log('[referral] applyPending: resolved =', JSON.stringify(resolved), 'userId =', userId)
   if (!resolved.ok) {
     if (resolved.reason === 'not_found') clearPendingReferralCode()
     return false
