@@ -144,7 +144,16 @@ export function getAvailableQuota(meta: AppMeta): number {
   const serverBonus = meta.bonusCardsUnlocked ?? 0
   // Optimistic fallback: referral attribution happened locally but server bonus not yet merged.
   const referralFallback = serverBonus === 0 && meta.referredByUserId?.trim() ? 10 : 0
-  return 20 + Math.max(serverBonus, referralFallback) + (meta.streakBonusCards ?? 0)
+  const quota = 20 + Math.max(serverBonus, referralFallback) + (meta.streakBonusCards ?? 0)
+  console.log('[quota] getAvailableQuota:', quota, {
+    bonusCardsUnlocked: meta.bonusCardsUnlocked,
+    referredByUserId: meta.referredByUserId,
+    referralBonusApplied: meta.referralBonusApplied,
+    streakBonusCards: meta.streakBonusCards,
+    serverBonus,
+    referralFallback,
+  })
+  return quota
 }
 
 // ─── localStorage persistence ─────────────────────────────────────────────────

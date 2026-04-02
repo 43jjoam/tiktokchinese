@@ -554,6 +554,7 @@ export default function ProfileTab() {
     const cc1Words = feedWordList.filter((w) => cc1IdSet.has(w.word_id))
     const nonCc1Words = feedWordList.filter((w) => !cc1IdSet.has(w.word_id))
     const filteredCc1 = filterCc1WordsByQuota(cc1Words, cc1Sequence, availableQuota, ws)
+    console.log('[quota] ProfileTab statsFeedWordList: quota =', availableQuota, 'cc1Words =', cc1Words.length, 'sequence =', cc1Sequence.length, 'filteredCc1 =', filteredCc1.length)
     return [...filteredCc1, ...nonCc1Words]
   }, [feedWordList, cc1WordIds, cc1Sequence, persisted.meta, ws])
 
