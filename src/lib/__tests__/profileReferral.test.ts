@@ -37,6 +37,16 @@ describe('remoteReferralFromDbRow', () => {
       referralBonusApplied: false,
     })
   })
+
+  it('accepts uuid v7 style third group and non-RFC variant fourth group', () => {
+    const id = '018f066e-f8dc-71d4-7166-446655440000'
+    expect(remoteReferralFromDbRow({ referral_code: null, referred_by: id, referral_count: 0 })).toEqual({
+      referralCode: null,
+      referredByUserId: id,
+      referralCount: 0,
+      referralBonusApplied: false,
+    })
+  })
 })
 
 describe('profileReferralColumnsForUpsert', () => {
@@ -60,6 +70,14 @@ describe('profileReferralColumnsForUpsert', () => {
     ).toEqual({
       referral_code: 'X',
       referred_by: '550e8400-e29b-41d4-a716-446655440000',
+    })
+    expect(
+      profileReferralColumnsForUpsert({
+        ...base,
+        referredByUserId: '  018f066e-f8dc-71d4-7166-446655440000  ',
+      }),
+    ).toEqual({
+      referred_by: '018f066e-f8dc-71d4-7166-446655440000',
     })
     expect(profileReferralColumnsForUpsert({ ...base, referralCode: null })).toEqual({})
   })

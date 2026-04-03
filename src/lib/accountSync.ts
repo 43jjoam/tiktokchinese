@@ -455,16 +455,9 @@ export async function uploadLearningProfileFromLocal(): Promise<
         }
         continue
       }
-      // PGRST116: upsert succeeded but RLS filtered the RETURNING clause — 0 rows returned.
-      // The row was written and any DB triggers (e.g. referral bonus) have already fired.
-      // Treat as success with a client-side timestamp so callers can proceed.
-      const errorCode = typeof error?.code === 'string' ? error.code : ''
-      if (errorCode === 'PGRST116') {
-        return { ok: true, updated_at: new Date().toISOString() }
-      }
       if (error) {
         lastMessage = error.message
-        const code = errorCode || undefined
+        const code = typeof error.code === 'string' ? error.code : undefined
         const retry = i < attempts - 1 && isRetryableSupabaseFailure(error.message, code)
         if (!retry) return { ok: false, error: error.message }
         await sleep(baseMs * Math.pow(2, i))
@@ -653,20 +646,21 @@ async function finalizeCloudProfileSync(
   await ensureReferralCodePersistedToCloud(userId)
   void syncCc1SequenceFromCloud(getCc1WordIds())
 
+  console.log('[referral] finalizeCloudProfileSync: running applyPendingReferralAttribution')
   const referralAttributed = await applyPendingReferralAttribution(userId)
+  console.log('[referral] finalizeCloudProfileSync: referralAttributed =', referralAttributed)
   if (referralAttributed) {
     tryShowReferralWelcomeToast()
     const refUp = await uploadLearningProfileWithLocalMeta()
     if (!refUp.ok) {
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
+    } else {
+      console.log('[referral] upload with referred_by succeeded, merging for bonus')
+      void tryNotifyReferrerJoinEmail()
+      // Pull server-applied bonus_cards_unlocked (+10 from trigger) back into local state
+      await mergeRemoteProfileIfNewer(userId)
+      console.log('[referral] post-merge bonusCardsUnlocked =', loadPersistedState().meta.bonusCardsUnlocked)
     }
-    // Always merge regardless of upload result — the DB trigger fires on UPDATE even if
-    // PostgREST's RETURNING clause returns 0 rows (RLS filtering), so bonus_cards_unlocked
-    // may already be set on the server. Pull it back into local state.
-    // Wait briefly to let the DB commit propagate before fetching.
-    await sleep(300)
-    void tryNotifyReferrerJoinEmail()
-    await mergeRemoteProfileIfNewer(userId)
   }
 
   let remoteRow = await fetchRemoteLearningProfile()

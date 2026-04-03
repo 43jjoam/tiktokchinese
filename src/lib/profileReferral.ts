@@ -23,16 +23,26 @@ type ReferralRow = {
   referral_bonus_applied?: boolean | null
 }
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+/**
+ * Any hyphenated 128-bit UUID string Postgres accepts (not only RFC4122 v1–v4).
+ * A stricter regex (version/variant nibbles) caused valid referrer ids to be dropped here so
+ * `referred_by` was omitted from upserts while `meta.referredByUserId` was still set locally.
+ */
+const UUID_HEX_WITH_HYPHENS =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function normalizeReferredByUuid(raw: string | null | undefined): string | null {
+  const t = typeof raw === 'string' ? raw.trim() : ''
+  return t && UUID_HEX_WITH_HYPHENS.test(t) ? t : null
+}
 
 export function remoteReferralFromDbRow(row: ReferralRow | null | undefined): RemoteReferralFields {
   if (!row) return { ...DEFAULT_REMOTE_REFERRAL_FIELDS }
   const code = row.referral_code
-  const ref = row.referred_by
+  const ref = normalizeReferredByUuid(row.referred_by ?? undefined)
   return {
     referralCode: typeof code === 'string' && code.trim().length > 0 ? code.trim().toUpperCase() : null,
-    referredByUserId: typeof ref === 'string' && UUID_RE.test(ref) ? ref : null,
+    referredByUserId: ref,
     referralCount: Math.max(0, Math.floor(Number(row.referral_count ?? 0)) || 0),
     referralBonusApplied: row.referral_bonus_applied === true,
   }
@@ -44,8 +54,7 @@ export function remoteReferralFromDbRow(row: ReferralRow | null | undefined): Re
  */
 export function profileReferralColumnsForUpsert(meta: AppMeta): ReferralRow {
   const c = meta.referralCode?.trim()
-  const ref =
-    meta.referredByUserId && UUID_RE.test(meta.referredByUserId) ? meta.referredByUserId : null
+  const ref = normalizeReferredByUuid(meta.referredByUserId ?? undefined)
   const out: ReferralRow = {}
   if (c) out.referral_code = c.toUpperCase()
   if (ref) out.referred_by = ref
