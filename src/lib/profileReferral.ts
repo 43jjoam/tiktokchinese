@@ -31,7 +31,7 @@ type ReferralRow = {
 const UUID_HEX_WITH_HYPHENS =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function normalizeReferredByUuid(raw: string | null | undefined): string | null {
+export function normalizeReferredByUuid(raw: string | null | undefined): string | null {
   const t = typeof raw === 'string' ? raw.trim() : ''
   return t && UUID_HEX_WITH_HYPHENS.test(t) ? t : null
 }

@@ -21,6 +21,7 @@ import {
 import {
   generateReferralCodeCandidate,
   isReferralCodeUniqueViolation,
+  normalizeReferredByUuid,
   profileReferralColumnsForUpsert,
   remoteReferralFromDbRow,
   type RemoteReferralFields,
@@ -617,9 +618,30 @@ export async function restoreCloudDataToLocalAfterSignIn(userId: string): Promis
 }
 
 /**
- * If the server row still has no `referral_code` but local does (after merge preservation), upsert once.
- * Safe to call after sign-in / restore; no-ops when cloud already matches local.
+ * Narrow PATCH for referral — avoids relying on bulk upsert to carry `referred_by`
+ * (some clients / timing still left the column null while local meta was set).
  */
+async function patchReferredByColumnOnCloud(userId: string, referredByRaw: string): Promise<boolean> {
+  const referred_by = normalizeReferredByUuid(referredByRaw)
+  if (!referred_by) return false
+  const supabase = getSupabaseClient()
+  if (!supabase) return false
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+  if (!session?.user?.id || session.user.id !== userId) return false
+  const { error } = await supabase
+    .from('user_learning_profiles')
+    .update({ referred_by })
+    .eq('user_id', userId)
+  if (error) {
+    console.warn('[referral] patch referred_by failed:', error.message)
+    return false
+  }
+  console.log('[referral] patch referred_by ok for user row')
+  return true
+}
+
 export async function ensureReferralCodePersistedToCloud(userId: string): Promise<void> {
   const supabase = getSupabaseClient()
   if (!supabase) return
@@ -657,16 +679,17 @@ async function finalizeCloudProfileSync(
   console.log('[referral] finalizeCloudProfileSync: referralAttributed =', referralAttributed)
   if (referralAttributed) {
     tryShowReferralWelcomeToast()
+    const refUuid = loadPersistedState().meta.referredByUserId?.trim()
     const refUp = await uploadLearningProfileWithLocalMeta()
+    if (refUuid) {
+      await patchReferredByColumnOnCloud(userId, refUuid)
+    }
     if (!refUp.ok) {
       console.warn('[referral] upload after ?ref= attribution failed:', refUp.error)
-    } else {
-      console.log('[referral] upload with referred_by succeeded, merging for bonus')
-      void tryNotifyReferrerJoinEmail()
-      // Pull server-applied bonus_cards_unlocked (+10 from trigger) back into local state
-      await mergeRemoteProfileIfNewer(userId)
-      console.log('[referral] post-merge bonusCardsUnlocked =', loadPersistedState().meta.bonusCardsUnlocked)
     }
+    void tryNotifyReferrerJoinEmail()
+    await mergeRemoteProfileIfNewer(userId)
+    console.log('[referral] post-merge bonusCardsUnlocked =', loadPersistedState().meta.bonusCardsUnlocked)
   }
 
   // Retry path: local meta has referredByUserId but cloud row never got referred_by (failed readback,
@@ -676,7 +699,8 @@ async function finalizeCloudProfileSync(
     if (localRef) {
       const remoteSnap = await fetchRemoteLearningProfile()
       if (remoteSnap && !remoteSnap.referral.referredByUserId?.trim()) {
-        console.log('[referral] reconcile: local referredByUserId but DB referred_by null — upserting')
+        console.log('[referral] reconcile: local referredByUserId but DB referred_by null — patch + upsert')
+        await patchReferredByColumnOnCloud(userId, localRef)
         const syncUp = await uploadLearningProfileWithLocalMeta()
         if (syncUp.ok) {
           void tryNotifyReferrerJoinEmail()
@@ -688,6 +712,15 @@ async function finalizeCloudProfileSync(
     }
   } catch (e) {
     console.warn('[referral] referred_by reconcile failed', e)
+  }
+
+  const lastRef = loadPersistedState().meta.referredByUserId?.trim()
+  if (lastRef) {
+    const snap = await fetchRemoteLearningProfile()
+    if (snap && !snap.referral.referredByUserId?.trim()) {
+      await patchReferredByColumnOnCloud(userId, lastRef)
+      await mergeRemoteProfileIfNewer(userId)
+    }
   }
 
   let remoteRow = await fetchRemoteLearningProfile()
