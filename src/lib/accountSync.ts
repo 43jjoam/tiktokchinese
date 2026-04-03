@@ -447,6 +447,12 @@ export async function uploadLearningProfileFromLocal(): Promise<
       if (!error && data?.updated_at) {
         return { ok: true, updated_at: data.updated_at as string }
       }
+      // Upsert can succeed but `.select().single()` returns 0 rows (e.g. RLS on readback).
+      // The row is still written and DB triggers (referral bonus) still run — treat as success.
+      const errorCodeEarly = typeof error?.code === 'string' ? error.code : ''
+      if (errorCodeEarly === 'PGRST116') {
+        return { ok: true, updated_at: new Date().toISOString() }
+      }
       if (error && isReferralCodeUniqueViolation(error)) {
         regenerateReferralCodeLocal()
         lastMessage = error.message
@@ -661,6 +667,27 @@ async function finalizeCloudProfileSync(
       await mergeRemoteProfileIfNewer(userId)
       console.log('[referral] post-merge bonusCardsUnlocked =', loadPersistedState().meta.bonusCardsUnlocked)
     }
+  }
+
+  // Retry path: local meta has referredByUserId but cloud row never got referred_by (failed readback,
+  // skipped upload when applyPending returned false because meta was already set, etc.).
+  try {
+    const localRef = loadPersistedState().meta.referredByUserId?.trim()
+    if (localRef) {
+      const remoteSnap = await fetchRemoteLearningProfile()
+      if (remoteSnap && !remoteSnap.referral.referredByUserId?.trim()) {
+        console.log('[referral] reconcile: local referredByUserId but DB referred_by null — upserting')
+        const syncUp = await uploadLearningProfileWithLocalMeta()
+        if (syncUp.ok) {
+          void tryNotifyReferrerJoinEmail()
+          await mergeRemoteProfileIfNewer(userId)
+        } else {
+          console.warn('[referral] reconcile upload failed:', syncUp.error)
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[referral] referred_by reconcile failed', e)
   }
 
   let remoteRow = await fetchRemoteLearningProfile()
