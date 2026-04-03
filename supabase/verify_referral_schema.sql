@@ -1,6 +1,11 @@
 /*
   Run in Supabase → SQL Editor (read-only checks).
 
+  WHERE IS referred_by?
+  - The app stores the referrer on public.user_learning_profiles.referred_by (uuid).
+  - auth.users (Authentication → Users) does NOT get a referred_by column from this app.
+    If you only looked at the Users table, you will not see referral data there.
+
   Confirms referral-related columns on user_learning_profiles, the bonus trigger,
   and the RPC used by ?ref= / Library invite code.
 
